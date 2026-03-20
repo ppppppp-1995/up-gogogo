@@ -1,0 +1,828 @@
+import React, { useState, useEffect, useRef } from 'react';
+// 【修复核心】将废弃的 CheckCircle2 替换为稳定的 CheckCircle
+import { Trophy, Timer, Info, CheckCircle, XCircle, ChevronRight, Loader2, Play } from 'lucide-react';
+
+// === 游戏全局配置 ===
+const GRID_ROWS = 20; 
+const GRID_COLS = 6;  
+const HEX_RADIUS = 10; 
+const FALL_Y_THRESHOLD = -25; 
+
+const START_POS = { x: 0, y: 1.5, z: 60 }; 
+const QUIZ_TRIGGER_Z = 35; 
+const GOAL_Z = -300; 
+
+const App = () => {
+  // === 状态管理 ===
+  const [gameState, setGameState] = useState('LOADING'); 
+  const [quizResult, setQuizResult] = useState(null);
+  const [timer, setTimer] = useState(10);
+  const [countdown, setCountdown] = useState(3);
+  
+  // === Refs ===
+  const mountRef = useRef(null);
+  const gameStateRef = useRef(gameState);
+  const quizTriggeredRef = useRef(false); 
+  
+  const sceneRef = useRef(null);
+  const cameraRef = useRef(null);
+  const rendererRef = useRef(null);
+  const playerRef = useRef(null);
+  const hexesRef = useRef([]);
+  const ballsRef = useRef([]); 
+  const lastFireTimeRef = useRef(0); 
+  const keysRef = useRef({});
+  const requestRef = useRef();
+  const resizeObserverRef = useRef(null);
+
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
+
+  // === 1. 初始化 3D 引擎 ===
+  useEffect(() => {
+    let isMounted = true;
+
+    const initEngine = () => {
+      const THREE = window.THREE;
+      if (!THREE || !mountRef.current || !isMounted) return;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x38bdf8); 
+      scene.fog = new THREE.Fog(0x38bdf8, 50, 200);
+      sceneRef.current = scene;
+
+      let width = mountRef.current.clientWidth || window.innerWidth * 0.8;
+      let height = mountRef.current.clientHeight || window.innerHeight * 0.8;
+
+      const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000); 
+      camera.position.set(0, 10, 70); 
+      cameraRef.current = camera;
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(width, height);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      rendererRef.current = renderer;
+      mountRef.current.appendChild(renderer.domElement);
+
+      // 【兼容性修复】增加 ResizeObserver 的环境安全检查
+      if (window.ResizeObserver) {
+        resizeObserverRef.current = new ResizeObserver(entries => {
+          for (let entry of entries) {
+            if (!mountRef.current || !rendererRef.current || !cameraRef.current) return;
+            const w = entry.contentRect.width;
+            const h = entry.contentRect.height;
+            if (w > 0 && h > 0) {
+              rendererRef.current.setSize(w, h);
+              cameraRef.current.aspect = w / h;
+              cameraRef.current.updateProjectionMatrix();
+            }
+          }
+        });
+        resizeObserverRef.current.observe(mountRef.current);
+      }
+
+      // 光影
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+      scene.add(ambientLight);
+      const sunLight = new THREE.DirectionalLight(0xfffaeb, 0.9);
+      sunLight.position.set(40, 70, 50);
+      sunLight.castShadow = true;
+      sunLight.shadow.mapSize.width = 1024;
+      sunLight.shadow.mapSize.height = 1024;
+      sunLight.shadow.camera.left = -80;
+      sunLight.shadow.camera.right = 80;
+      sunLight.shadow.camera.top = 80;
+      sunLight.shadow.camera.bottom = -80;
+      scene.add(sunLight);
+
+      // 构建糖豆人角色
+      const playerGroup = new THREE.Group();
+      const skinMat = new THREE.MeshStandardMaterial({ color: 0xffb6c1, roughness: 0.3 }); 
+      const shirtMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.5 }); 
+      const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.7 }); 
+      const whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 }); 
+      
+      const cylinder = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 1.0, 24), skinMat);
+      cylinder.castShadow = true;
+      const topDome = new THREE.Mesh(new THREE.SphereGeometry(0.7, 24, 24, 0, Math.PI * 2, 0, Math.PI / 2), skinMat);
+      topDome.position.y = 0.5;
+      topDome.castShadow = true;
+      const bottomDome = new THREE.Mesh(new THREE.SphereGeometry(0.7, 24, 24, 0, Math.PI * 2, 0, Math.PI / 2), skinMat);
+      bottomDome.rotation.x = Math.PI;
+      bottomDome.position.y = -0.5;
+      bottomDome.castShadow = true;
+
+      const shirt = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.72, 0.6, 24), shirtMat);
+      shirt.position.y = 0.1;
+      const pants = new THREE.Mesh(new THREE.CylinderGeometry(0.71, 0.71, 0.4, 24), pantsMat);
+      pants.position.y = -0.4;
+
+      const facePlateGeo = new THREE.SphereGeometry(0.55, 16, 16);
+      const facePlate = new THREE.Mesh(facePlateGeo, whiteMat);
+      facePlate.scale.set(1, 0.8, 0.3); 
+      facePlate.position.set(0, 0.2, 0.62); 
+
+      const eyeMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
+      const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 12), eyeMat);
+      eyeL.position.set(0.2, 0.25, 0.75); 
+      const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 12), eyeMat);
+      eyeR.position.set(-0.2, 0.25, 0.75);
+
+      const createLimb = (x, y, z, mat) => {
+        const group = new THREE.Group();
+        group.position.set(x, y, z);
+        const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.15, 0.6, 12), mat);
+        mesh.position.y = -0.3; 
+        mesh.castShadow = true;
+        group.add(mesh);
+        return group;
+      };
+
+      const armL = createLimb(0.85, 0.1, 0, skinMat);
+      const armR = createLimb(-0.85, 0.1, 0, skinMat);
+      const legL = createLimb(0.3, -0.8, 0, pantsMat);
+      const legR = createLimb(-0.3, -0.8, 0, pantsMat);
+
+      playerGroup.add(cylinder, topDome, bottomDome, shirt, pants, facePlate, eyeL, eyeR, armL, armR, legL, legR);
+      playerGroup.position.set(START_POS.x, START_POS.y, START_POS.z);
+      playerGroup.rotation.y = Math.PI;
+
+      scene.add(playerGroup);
+      playerRef.current = { 
+        mesh: playerGroup, 
+        vel: new THREE.Vector3(), 
+        knockback: new THREE.Vector3(), 
+        onGround: false, 
+        wasOnGround: true, 
+        jumpCooldownUntil: 0, 
+        limbs: { armL, armR, legL, legR },
+        targetRotationY: Math.PI,
+        camYaw: Math.PI,
+        backwardRunTime: 0 // 【新增】记录向后跑的时长
+      };
+
+      // 生成安全路径 (不连续断点路线，缩减至约 10%)
+      const safeIds = new Set();
+      let currC = Math.floor(GRID_COLS / 2);
+      let lastRowHadSafe = true; 
+      
+      for (let r = 0; r < GRID_ROWS; r++) {
+        if (lastRowHadSafe && Math.random() < 0.45) {
+          lastRowHadSafe = false;
+        } else {
+          safeIds.add(`hex-${r}-${currC}`);
+          lastRowHadSafe = true;
+          if (Math.random() < 0.3) {
+            const dir = Math.random() < 0.5 ? 1 : -1;
+            const nextC = currC + dir;
+            if (nextC >= 0 && nextC < GRID_COLS) {
+              currC = nextC;
+            }
+          }
+        }
+      }
+
+      // 生成巨型双层渐变色六边形及陷阱
+      const hexes = [];
+      const outerHexGeo = new THREE.CylinderGeometry(HEX_RADIUS, HEX_RADIUS, 1.0, 6);
+      const innerHexGeo = new THREE.CylinderGeometry(HEX_RADIUS * 0.93, HEX_RADIUS * 0.93, 1.05, 6); 
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = 128; canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+      const grad = ctx.createLinearGradient(0, 0, 128, 128);
+      grad.addColorStop(0, '#fbcfe8'); 
+      grad.addColorStop(1, '#be185d'); 
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 128, 128);
+      const hexTexture = new THREE.CanvasTexture(canvas);
+      const innerMat = new THREE.MeshStandardMaterial({ map: hexTexture, roughness: 0.6 }); 
+
+      for (let r = 0; r < GRID_ROWS; r++) {
+        for (let c = 0; c < GRID_COLS; c++) {
+          const id = `hex-${r}-${c}`;
+          const isSafe = safeIds.has(id);
+          
+          // 【核心修改】为安全六边形赋予大概 15% 的几率成为陷阱（由于安全路径大概20多块，刚好是 3-4 个左右）
+          // 非安全块依然保持 22% 的几率成为陷阱
+          const isTrap = isSafe ? Math.random() < 0.15 : Math.random() < 0.22; 
+          
+          const hexGroup = new THREE.Group();
+          
+          const outerMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
+          const outerHex = new THREE.Mesh(outerHexGeo, outerMat);
+          outerHex.receiveShadow = true;
+          outerHex.castShadow = true;
+
+          const uniqueInnerMat = innerMat.clone();
+          const innerHex = new THREE.Mesh(innerHexGeo, uniqueInnerMat);
+          innerHex.receiveShadow = true;
+          
+          hexGroup.add(outerHex);
+          hexGroup.add(innerHex);
+
+          const xOffset = (r % 2 === 0) ? 0 : (Math.sqrt(3) * HEX_RADIUS) / 2;
+          const x = (c - (GRID_COLS-1)/2) * (Math.sqrt(3) * HEX_RADIUS) + xOffset;
+          const z = 0 - r * (1.5 * HEX_RADIUS); 
+          
+          hexGroup.position.set(x, 0, z);
+          scene.add(hexGroup);
+          hexes.push({ 
+            mesh: hexGroup, 
+            outerMat: outerMat, 
+            innerMat: uniqueInnerMat, 
+            id, 
+            isSafe, 
+            isTrap,
+            isGlowing: false, 
+            status: 'STABLE', 
+            shakeTime: 0, 
+            origX: x 
+          });
+        }
+      }
+      hexesRef.current = hexes;
+
+      // 起点与终点平台
+      const startZone = new THREE.Mesh(new THREE.BoxGeometry(100, 1, 80), new THREE.MeshStandardMaterial({ color: 0xa855f7 }));
+      startZone.position.set(0, -0.5, 48.5); 
+      startZone.receiveShadow = true;
+      scene.add(startZone);
+
+      const triggerLine = new THREE.Mesh(new THREE.BoxGeometry(100, 1.1, 3), new THREE.MeshStandardMaterial({ color: 0xfacc15 }));
+      triggerLine.position.set(0, -0.5, QUIZ_TRIGGER_Z);
+      scene.add(triggerLine);
+
+      const endZone = new THREE.Mesh(new THREE.BoxGeometry(100, 1, 80), new THREE.MeshStandardMaterial({ color: 0x22c55e }));
+      endZone.position.set(0, -0.5, -330); 
+      endZone.receiveShadow = true;
+      scene.add(endZone);
+
+      // 渲染与发光动画
+      const animate = () => {
+        requestRef.current = requestAnimationFrame(animate);
+        
+        if (gameStateRef.current === 'PLAYING' || gameStateRef.current === 'PLAYING_RESUME') {
+          updatePhysics(THREE);
+        }
+
+        const blinkTime = Date.now() * 0.008; 
+        hexesRef.current.forEach(hex => {
+          if (hex.isGlowing && hex.outerMat && hex.innerMat) {
+            const isBright = Math.sin(blinkTime) > 0;
+            hex.outerMat.emissiveIntensity = isBright ? 0.8 : 0.1;
+            hex.innerMat.emissiveIntensity = isBright ? 0.35 : 0.05; 
+          }
+        });
+
+        // 摄像机逻辑 (延迟平滑转动追尾视角)
+        if (playerRef.current && playerRef.current.mesh) {
+          const playerCamYaw = playerRef.current.camYaw;
+          
+          const camDist = 12; 
+          const camHeight = 7; 
+          const targetCamPos = new THREE.Vector3(
+            playerRef.current.mesh.position.x - Math.sin(playerCamYaw) * camDist, 
+            playerRef.current.mesh.position.y + camHeight, 
+            playerRef.current.mesh.position.z - Math.cos(playerCamYaw) * camDist
+          );
+          
+          const lookAhead = 10;
+          const targetLookAt = new THREE.Vector3(
+            playerRef.current.mesh.position.x + Math.sin(playerCamYaw) * lookAhead, 
+            playerRef.current.mesh.position.y + 1.0, 
+            playerRef.current.mesh.position.z + Math.cos(playerCamYaw) * lookAhead
+          );
+
+          if (!cameraRef.current.lookAtTarget) {
+            cameraRef.current.lookAtTarget = new THREE.Vector3().copy(targetLookAt);
+          }
+
+          camera.position.lerp(targetCamPos, 0.1); 
+          cameraRef.current.lookAtTarget.lerp(targetLookAt, 0.1); 
+          
+          camera.lookAt(cameraRef.current.lookAtTarget);
+        }
+
+        renderer.render(scene, camera);
+      };
+      animate();
+
+      setGameState('READY');
+    };
+
+    if (window.THREE) {
+      initEngine();
+    } else {
+      const script = document.createElement('script');
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
+      script.onload = initEngine;
+      script.onerror = () => console.error("Three.js load failed!");
+      document.head.appendChild(script);
+    }
+
+    return () => {
+      isMounted = false;
+      cancelAnimationFrame(requestRef.current);
+      if (resizeObserverRef.current && mountRef.current) {
+         resizeObserverRef.current.disconnect();
+      }
+      if (rendererRef.current && mountRef.current) {
+         if (mountRef.current.contains(rendererRef.current.domElement)) {
+             mountRef.current.removeChild(rendererRef.current.domElement);
+         }
+      }
+    };
+  }, []);
+
+  // === 物理与碰撞逻辑 ===
+  const updatePhysics = (THREE) => {
+    const player = playerRef.current;
+    if (!player || !player.mesh) return;
+
+    // 【修改】调整人物的重量感与惯性
+    const maxSpeed = 0.46; // 稍微提升极限速度，弥补起步的迟缓
+    const accel = 0.018;   // 降低起步加速度，让起跑显得更沉重、有肉感
+    const friction = 0.97; // 提高惯性保留系数(摩擦力变小)，停下时会不受控地滑行更长距离
+    const jumpForce = 0.52; 
+    const gravity = 0.025; 
+
+    let isMoving = false;
+    let currentlyGrounded = false; 
+
+    // 生成红球逻辑
+    const timeNow = Date.now();
+    if (timeNow - lastFireTimeRef.current > 2000) { 
+        const ball = new THREE.Mesh(new THREE.SphereGeometry(7, 32, 32), new THREE.MeshStandardMaterial({color: 0xef4444, roughness: 0.4}));
+        ball.position.set((Math.random() - 0.5) * 60, 7, GOAL_Z + 15); 
+        ball.castShadow = true;
+        sceneRef.current.add(ball);
+        ballsRef.current.push({ mesh: ball, active: true });
+        lastFireTimeRef.current = timeNow;
+    }
+
+    // 更新红球与碰撞
+    ballsRef.current.forEach(ball => {
+        if (!ball.active) return;
+        ball.mesh.position.z += 0.9; 
+        ball.mesh.rotation.x += 0.1; 
+
+        const dx = player.mesh.position.x - ball.mesh.position.x;
+        const dy = player.mesh.position.y - ball.mesh.position.y;
+        const dz = player.mesh.position.z - ball.mesh.position.z;
+        const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+        if (dist < 7.7) {
+            const horizontalDist = Math.sqrt(dx*dx + dz*dz);
+            const pushDirX = horizontalDist > 0 ? dx / horizontalDist : (Math.random() - 0.5);
+            const pushDirZ = horizontalDist > 0 ? dz / horizontalDist : 1;
+            player.knockback.set(pushDirX * 1.8, 0, pushDirZ * 1.8);
+            player.vel.y = 0.45; 
+        }
+
+        if (ball.mesh.position.z > START_POS.z + 10) { 
+            sceneRef.current.remove(ball.mesh);
+            ball.active = false;
+        }
+    });
+    ballsRef.current = ballsRef.current.filter(b => b.active);
+
+    // 玩家移动与惯性
+    let inputX = 0;
+    let inputZ = 0;
+    if (keysRef.current['w'] || keysRef.current['arrowup']) { inputZ -= 1; isMoving = true; }
+    if (keysRef.current['s'] || keysRef.current['arrowdown']) { inputZ += 1; isMoving = true; }
+    if (keysRef.current['a'] || keysRef.current['arrowleft']) { inputX -= 1; isMoving = true; }
+    if (keysRef.current['d'] || keysRef.current['arrowright']) { inputX += 1; isMoving = true; }
+
+    if (isMoving) {
+        // 贴合摄像机视角的移动方向
+        const dir = new THREE.Vector3(inputX, 0, inputZ).normalize();
+        dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.camYaw - Math.PI);
+
+        player.vel.x += dir.x * accel;
+        player.vel.z += dir.z * accel;
+        player.targetRotationY = Math.atan2(player.vel.x, player.vel.z);
+    }
+
+    // 计算当前运动方向与摄像机朝向的角度差
+    let yawDiff = player.targetRotationY - player.camYaw;
+    while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+    while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+    
+    // 【核心视角优化】判断是否正在大角度向后/侧后方移动 (绝对角度差大于约 100 度)
+    const isRunningBackwards = Math.abs(yawDiff) > Math.PI * 0.55;
+
+    // 累加向后跑的时间 (以 60fps 约 16.6ms 为步长)
+    if (isMoving && isRunningBackwards) {
+        player.backwardRunTime += 16.6;
+    } else {
+        player.backwardRunTime = 0; // 停下或往前跑时重置计时器
+    }
+
+    // 动态调整摄像机平滑系数
+    let camLerpFactor = 0.03;
+    if (isRunningBackwards) {
+        if (player.backwardRunTime < 500) {
+            // 向后跑的前 500ms：视角完全死区，不跟随！方便微调站位
+            camLerpFactor = 0;
+        } else {
+            // 超过 500ms 后：摄像机开始极其缓慢地转动，逐渐恢复正常速率
+            camLerpFactor = Math.min(0.03, ((player.backwardRunTime - 500) / 1000) * 0.03);
+        }
+    }
+
+    player.camYaw += yawDiff * camLerpFactor;
+
+    player.vel.x *= friction;
+    player.vel.z *= friction;
+
+    const currentSpeed = Math.sqrt(player.vel.x * player.vel.x + player.vel.z * player.vel.z);
+    if (currentSpeed > maxSpeed) {
+        player.vel.x = (player.vel.x / currentSpeed) * maxSpeed;
+        player.vel.z = (player.vel.z / currentSpeed) * maxSpeed;
+    }
+
+    player.mesh.position.x += player.vel.x;
+    player.mesh.position.z += player.vel.z;
+    
+    // 让人物身体的转动也增加一点点厚重感
+    let diff = player.targetRotationY - player.mesh.rotation.y;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    player.mesh.rotation.y += diff * 0.1;
+
+    player.mesh.position.add(player.knockback);
+    player.knockback.multiplyScalar(0.85); 
+    
+    player.vel.y -= gravity;
+    player.mesh.position.y += player.vel.y;
+
+    // 碰撞检测与陷阱触发
+    let closestHex = null;
+    let minDist = Infinity;
+    hexesRef.current.forEach(hex => {
+      if (hex.status === 'FALLING') return;
+      const dx = player.mesh.position.x - hex.mesh.position.x;
+      const dz = player.mesh.position.z - hex.mesh.position.z;
+      const dist = Math.sqrt(dx*dx + dz*dz);
+      if (dist < minDist) {
+        minDist = dist;
+        closestHex = hex;
+      }
+    });
+
+    if (closestHex && minDist < HEX_RADIUS * 1.15) { 
+      const floorHeight = closestHex.mesh.position.y + 1.5; 
+      if (player.mesh.position.y <= floorHeight && player.mesh.position.y >= floorHeight - 3.0 && player.vel.y <= 0) {
+        player.mesh.position.y = floorHeight;
+        player.vel.y = 0;
+        currentlyGrounded = true; 
+        
+        // 【核心修改】将陷阱触发逻辑与“是否为安全块”解绑
+        if (closestHex.status === 'STABLE') {
+          if (closestHex.isTrap) {
+            // 触发陷阱变红 (哪怕它是发着绿光的正确安全块，踩上去一样会变红并惩罚！)
+            closestHex.outerMat.color.setHex(0xff0000);
+            closestHex.outerMat.emissive.setHex(0xff0000);
+            closestHex.outerMat.emissiveIntensity = 1;
+            closestHex.innerMat.emissive.setHex(0xff0000);
+            closestHex.innerMat.emissiveIntensity = 0.5;
+
+            const rand = Math.random();
+            if (rand < 0.33) {
+              player.vel.y = 1.1; // 极高弹飞
+            } else if (rand < 0.66) {
+              player.knockback.set((Math.random() - 0.5) * 2, 0, 7); // 后退击飞
+              player.vel.y = 0.45;
+            } else {
+              player.knockback.set((Math.random() - 0.5) * 2, 0, -7); // 极速冲刺
+              player.vel.y = 0.45;
+            }
+            
+            closestHex.status = 'SHAKING';
+            closestHex.shakeTime = Date.now();
+            
+          } else if (!closestHex.isSafe) {
+            // 普通的危险块：沼泽泥潭阻力，强打断连跳
+            player.vel.x *= 0.3; 
+            player.vel.z *= 0.3;
+            
+            closestHex.status = 'SHAKING';
+            closestHex.shakeTime = Date.now();
+          }
+        }
+      }
+    }
+
+    // 塌陷动画 (极速塌陷)
+    hexesRef.current.forEach(hex => {
+      if (hex.status === 'SHAKING') {
+        const elapsed = Date.now() - hex.shakeTime;
+        hex.mesh.position.x = hex.origX + Math.sin(elapsed * 0.8) * 0.3; 
+        if (elapsed > 150) hex.status = 'FALLING'; 
+      } else if (hex.status === 'FALLING') {
+        hex.mesh.position.y -= 1.8; 
+        hex.mesh.rotation.x += 0.15;
+      }
+    });
+
+    // 安全区锁定
+    if (player.mesh.position.z > 8.5) {
+      if (player.mesh.position.y <= 1.5 && player.mesh.position.y >= 0.5 && player.vel.y <= 0) {
+        player.mesh.position.y = 1.5;
+        player.vel.y = 0;
+        currentlyGrounded = true;
+      }
+    }
+    if (player.mesh.position.z < -290.0) {
+      if (player.mesh.position.y <= 1.5 && player.mesh.position.y >= 0.5 && player.vel.y <= 0) {
+        player.mesh.position.y = 1.5;
+        player.vel.y = 0;
+        currentlyGrounded = true;
+        if (player.mesh.position.z < GOAL_Z) {
+          setGameState('WIN');
+        }
+      }
+    }
+
+    // 落地跳跃硬直机制
+    if (!player.wasOnGround && currentlyGrounded) {
+      player.jumpCooldownUntil = Date.now() + 180;
+    }
+    player.wasOnGround = currentlyGrounded; 
+    player.onGround = currentlyGrounded;
+
+    if (keysRef.current[' '] && player.onGround && Math.abs(player.vel.y) < 0.01 && Date.now() >= player.jumpCooldownUntil) {
+      player.vel.y = jumpForce;
+      player.onGround = false;
+    }
+
+    // 肢体动画
+    if (isMoving && player.onGround) {
+      const animTime = Date.now() * 0.015;
+      player.limbs.armL.rotation.x = Math.sin(animTime) * 0.6;
+      player.limbs.armR.rotation.x = -Math.sin(animTime) * 0.6;
+      player.limbs.legL.rotation.x = -Math.sin(animTime) * 0.6;
+      player.limbs.legR.rotation.x = Math.sin(animTime) * 0.6;
+    } else if (!player.onGround) {
+      player.limbs.armL.rotation.x = Math.PI / 4;
+      player.limbs.armR.rotation.x = Math.PI / 4;
+      player.limbs.legL.rotation.x = -Math.PI / 6;
+      player.limbs.legR.rotation.x = 0;
+    } else {
+      player.limbs.armL.rotation.x = 0;
+      player.limbs.armR.rotation.x = 0;
+      player.limbs.legL.rotation.x = 0;
+      player.limbs.legR.rotation.x = 0;
+    }
+
+    // 答题触发
+    if (!quizTriggeredRef.current && player.mesh.position.z < QUIZ_TRIGGER_Z) {
+      quizTriggeredRef.current = true;
+      setGameState('QUIZ');
+      setTimer(10);
+      return; 
+    }
+
+    if (player.mesh.position.y < FALL_Y_THRESHOLD) handleFall();
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e) => { if(e && e.key) keysRef.current[e.key.toLowerCase()] = true; };
+    const handleKeyUp = (e) => { if(e && e.key) keysRef.current[e.key.toLowerCase()] = false; };
+    const handleBlur = () => { keysRef.current = {}; };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
+
+  const startGame = () => {
+    setGameState('START_COUNTDOWN');
+    setCountdown(3);
+  };
+
+  const handleQuizAnswer = (ans) => {
+    const isCorrect = ans === 'C';
+    setQuizResult(isCorrect ? 'CORRECT' : 'WRONG');
+    setGameState('PLAYING_RESUME');
+
+    if (isCorrect && hexesRef.current.length > 0) {
+      hexesRef.current.forEach(hex => {
+        if (hex.isSafe) {
+          hex.outerMat.color.setHex(0x34d399); 
+          hex.outerMat.emissive.setHex(0x34d399); 
+          hex.innerMat.emissive.setHex(0x34d399); 
+          hex.isGlowing = true; 
+        }
+      });
+    }
+  };
+
+  const handleFall = () => {
+    if (gameStateRef.current === 'FALLEN') return; 
+    gameStateRef.current = 'FALLEN'; 
+    setGameState('FALLEN');
+    
+    setTimeout(() => {
+      if (playerRef.current && playerRef.current.mesh) {
+        playerRef.current.mesh.position.set(START_POS.x, START_POS.y, START_POS.z);
+        playerRef.current.vel.set(0, 0, 0);
+        playerRef.current.knockback.set(0, 0, 0);
+        playerRef.current.mesh.rotation.y = Math.PI;
+        playerRef.current.targetRotationY = Math.PI;
+        playerRef.current.camYaw = Math.PI; 
+        playerRef.current.jumpCooldownUntil = 0; 
+        playerRef.current.backwardRunTime = 0; // 【新增】跌落重置计时器
+        quizTriggeredRef.current = false; 
+      }
+      
+      if (cameraRef.current && window.THREE) {
+        const resetRotY = Math.PI;
+        const camDist = 12;
+        const camHeight = 7;
+        const lookAhead = 10;
+        
+        cameraRef.current.position.set(
+          START_POS.x - Math.sin(resetRotY) * camDist, 
+          START_POS.y + camHeight, 
+          START_POS.z - Math.cos(resetRotY) * camDist
+        );
+        
+        const resetLookAt = new window.THREE.Vector3(
+          START_POS.x + Math.sin(resetRotY) * lookAhead,
+          START_POS.y + 1.0,
+          START_POS.z + Math.cos(resetRotY) * lookAhead
+        );
+        
+        cameraRef.current.lookAtTarget = resetLookAt;
+        cameraRef.current.lookAt(resetLookAt);
+      }
+      
+      hexesRef.current.forEach(hex => {
+        hex.status = 'STABLE';
+        hex.shakeTime = 0;
+        hex.mesh.position.y = 0;
+        hex.mesh.rotation.x = 0;
+        hex.mesh.position.x = hex.origX;
+        
+        // 彻底复原陷阱与安全光效颜色
+        if (hex.isGlowing || hex.isTrap) {
+          hex.isGlowing = false;
+          hex.outerMat.color.setHex(0xffffff);
+          hex.outerMat.emissive.setHex(0x000000);
+          hex.outerMat.emissiveIntensity = 0;
+          hex.innerMat.emissive.setHex(0x000000);
+          hex.innerMat.emissiveIntensity = 0;
+        }
+      });
+
+      ballsRef.current.forEach(ball => {
+         if (sceneRef.current) sceneRef.current.remove(ball.mesh);
+      });
+      ballsRef.current = [];
+      
+      gameStateRef.current = 'PLAYING'; 
+      setGameState('PLAYING');
+    }, 1200);
+  };
+
+  useEffect(() => {
+    let interval;
+    if (gameState === 'START_COUNTDOWN') {
+      if (countdown > 0) {
+        interval = setTimeout(() => setCountdown(c => c - 1), 1000);
+      } else {
+        setGameState('PLAYING');
+      }
+    } else if (gameState === 'QUIZ') {
+      if (timer > 0) {
+        interval = setTimeout(() => setTimer(t => t - 1), 1000);
+      } else {
+        handleQuizAnswer('TIMEOUT');
+      }
+    }
+    return () => clearTimeout(interval);
+  }, [gameState, countdown, timer]);
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-sky-100 font-sans text-slate-800 overflow-hidden p-4">
+      <div className="relative w-full h-[82vh] max-w-6xl rounded-[2.5rem] overflow-hidden border-8 border-white shadow-[0_20px_50px_rgba(2,132,199,0.3)] bg-sky-400">
+        
+        <div ref={mountRef} className="absolute inset-0 z-0" />
+
+        {gameState === 'LOADING' && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-sky-500 text-white">
+             <Loader2 className="w-20 h-20 animate-spin text-white mb-6 drop-shadow-md" />
+             <p className="text-3xl font-black tracking-widest animate-pulse drop-shadow-md">构建大型赛道...</p>
+          </div>
+        )}
+
+        {/* 极简开始大厅 */}
+        {gameState === 'READY' && (
+          <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-sky-900/40 backdrop-blur-sm p-8 text-center transition-opacity duration-500">
+            <h1 className="text-7xl font-black mb-16 italic tracking-tighter text-white drop-shadow-[0_8px_0_#0284c7]">阿噗向前冲!</h1>
+            <button 
+              onClick={startGame}
+              className="px-16 py-6 bg-pink-400 text-white font-black text-4xl rounded-full hover:bg-pink-500 active:scale-95 shadow-[0_8px_0_#be185d] flex justify-center items-center gap-4 transition-all hover:scale-105"
+            >
+              <Play className="fill-current w-10 h-10" /> 开始游戏
+            </button>
+          </div>
+        )}
+
+        {gameState === 'START_COUNTDOWN' && (
+          <div className="absolute inset-0 z-40 flex flex-col items-center justify-center">
+             <div className="text-[15rem] font-black text-white italic drop-shadow-[0_15px_0_#be185d] animate-ping">
+               {countdown > 0 ? countdown : 'GO!'}
+             </div>
+          </div>
+        )}
+
+        {(gameState === 'PLAYING' || gameState === 'PLAYING_RESUME') && (
+          <div className="absolute top-6 left-0 right-0 flex justify-center z-10 pointer-events-none">
+            <div className="bg-white/90 border-4 border-sky-200 rounded-full px-8 py-3 flex items-center gap-3 shadow-xl">
+               <Trophy className="text-yellow-500 w-6 h-6" />
+               <span className="font-black tracking-widest uppercase italic text-sky-800 text-lg">
+                 {quizTriggeredRef.current ? "小心陷阱与深渊!" : "冲向黄线区!"}
+               </span>
+            </div>
+          </div>
+        )}
+
+        {gameState === 'QUIZ' && (
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-sky-900/60 backdrop-blur-md p-4 animate-in fade-in zoom-in duration-300">
+            <div className="absolute top-10 flex gap-4 text-white font-black text-4xl drop-shadow-md">
+                <Timer className={timer <= 3 ? "text-red-400 animate-pulse w-10 h-10" : "text-white w-10 h-10"} />
+                {timer}s
+            </div>
+            <div className="bg-white border-8 border-pink-300 p-10 rounded-[2.5rem] shadow-2xl w-full max-w-xl">
+              <div className="inline-block bg-pink-100 text-pink-600 px-4 py-1 rounded-full font-black uppercase tracking-widest text-sm mb-6">
+                 赛道问答
+              </div>
+              <h2 className="text-3xl font-black mb-10 text-slate-800 leading-tight">苏轼的字是（&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;）</h2>
+              <div className="grid gap-4">
+                {['A. 子由', 'B. 自由', 'C. 子瞻'].map((opt, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleQuizAnswer(opt[0])}
+                    className="w-full p-6 bg-sky-50 hover:bg-sky-500 hover:text-white rounded-2xl font-black text-xl text-left transition-colors flex justify-between items-center group border-4 border-sky-100 shadow-sm"
+                  >
+                    {opt}
+                    <ChevronRight className="opacity-0 group-hover:opacity-100 transition-opacity" size={28} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {gameState === 'FALLEN' && (
+          <div className="absolute inset-0 z-40 bg-pink-500/30 flex items-center justify-center">
+             <div className="bg-white border-8 border-pink-400 px-12 py-6 rounded-[3rem] text-pink-500 font-black text-5xl italic tracking-tighter shadow-2xl transform rotate-2 animate-bounce">
+                淘汰! 重新出发!
+             </div>
+          </div>
+        )}
+
+        {gameState === 'WIN' && (
+          <div className="absolute inset-0 z-50 bg-green-400 flex flex-col items-center justify-center p-8 text-white text-center">
+            <Trophy size={140} className="mb-8 animate-bounce text-yellow-300 drop-shadow-xl" />
+            <h2 className="text-7xl font-black italic mb-6 drop-shadow-[0_8px_0_#166534]">第一关达成！</h2>
+            <div className="bg-white text-green-600 px-10 py-5 rounded-full font-black text-2xl animate-pulse shadow-xl border-4 border-green-200">
+               超长赛道挑战成功！请等待第二关...
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 flex flex-wrap justify-center gap-10 text-sky-700 text-sm font-black tracking-widest uppercase">
+         <div className="flex items-center gap-4 bg-white px-6 py-3 rounded-2xl shadow-sm border border-sky-200">
+            <div className="flex flex-col items-center gap-1">
+               <kbd className="px-3 py-1 bg-slate-100 rounded-lg border-b-4 border-slate-300 text-slate-700">W</kbd>
+               <div className="flex gap-1">
+                  <kbd className="px-3 py-1 bg-slate-100 rounded-lg border-b-4 border-slate-300 text-slate-700">A</kbd>
+                  <kbd className="px-3 py-1 bg-slate-100 rounded-lg border-b-4 border-slate-300 text-slate-700">S</kbd>
+                  <kbd className="px-3 py-1 bg-slate-100 rounded-lg border-b-4 border-slate-300 text-slate-700">D</kbd>
+               </div>
+            </div>
+            <span>慢速移动</span>
+         </div>
+         <div className="flex flex-col items-center justify-center gap-2 bg-white px-8 py-3 rounded-2xl shadow-sm border border-sky-200">
+            <kbd className="px-12 py-1 bg-slate-100 rounded-lg border-b-4 border-slate-300 text-slate-700">Space</kbd>
+            <span>奋力跳跃</span>
+         </div>
+      </div>
+    </div>
+  );
+};
+
+export default App;
