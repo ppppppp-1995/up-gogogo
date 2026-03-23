@@ -2,33 +2,48 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
     <title>阿噗向前冲 - 3D闯关</title>
     
-    <!-- 引入 Tailwind CSS (样式) -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- 引入 React & ReactDOM (核心框架) -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
-    <!-- 引入 Babel (用于在浏览器端编译JSX) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- 引入 Three.js (3D引擎) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <style>
-        body { margin: 0; padding: 0; background-color: #e0f2fe; overflow: hidden; font-family: sans-serif; }
+        body { 
+            margin: 0; padding: 0; background-color: #e0f2fe; overflow: hidden; font-family: sans-serif; 
+            touch-action: none; 
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        @media screen and (orientation: portrait) {
+            #portrait-lock { display: flex !important; }
+            #app-container { display: none !important; }
+        }
+        #portrait-lock { display: none; }
     </style>
 </head>
 <body>
-    <div id="root"></div>
+    <!-- 竖屏警告提示 -->
+    <div id="portrait-lock" class="fixed inset-0 bg-sky-900 z-[9999] flex-col items-center justify-center text-white p-8 text-center">
+        <svg class="w-28 h-28 mb-8 animate-[pulse_2s_infinite] text-sky-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" transform="rotate(90 12 12)" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4l16 16M4 20L20 4" class="opacity-30"/>
+        </svg>
+        <h2 class="text-4xl font-black mb-4 tracking-wider">请旋转手机屏幕</h2>
+        <p class="text-sky-200 text-lg leading-relaxed mt-4">为了获得最佳的 3D 跑酷体验<br/>本游戏需要<span class="text-yellow-400 font-bold mx-1 text-xl">横向</span>握持设备游玩</p>
+    </div>
+
+    <div id="app-container">
+        <div id="root"></div>
+    </div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect, useRef, useCallback } = React;
 
-        // === 替换 Lucide 图标库为原生 SVG 组件 ===
+        // === 原生 SVG 组件 ===
         const Trophy = ({ className, size = 24 }) => (
             <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7c0 6 3 10 6 10s6-4 6-10V2z"/></svg>
         );
@@ -44,6 +59,13 @@
         const Play = ({ className, size = 24 }) => (
             <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         );
+        // 【新增】反馈动画所需的正确/错误图标
+        const CheckCircle = ({ className, size = 24 }) => (
+            <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        );
+        const XCircle = ({ className, size = 24 }) => (
+            <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        );
 
         // === 游戏全局配置 ===
         const GRID_ROWS = 20; 
@@ -52,35 +74,70 @@
         const FALL_Y_THRESHOLD = -25; 
 
         const START_POS = { x: 0, y: 1.5, z: 60 }; 
-        const QUIZ_TRIGGER_Z = 35; 
-        const GOAL_Z = -300; 
+        const QUIZ1_TRIGGER_Z = 35; 
+        
+        const QUIZ2_TRIGGER_Z = -422; 
+        const STAGE2_WIN_Z = -700; 
+
+        // 绘制彩色扇形转盘
+        const createPieTexture = (color1, color2) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            const cx = 128, cy = 128, r = 128;
+            for (let i = 0; i < 8; i++) {
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.arc(cx, cy, r, i * Math.PI / 4, (i + 1) * Math.PI / 4);
+                ctx.fillStyle = i % 2 === 0 ? color1 : color2;
+                ctx.fill();
+            }
+            return new THREE.CanvasTexture(canvas);
+        };
 
         const App = () => {
-          // === 状态管理 ===
           const [gameState, setGameState] = useState('LOADING'); 
+          const [quizType, setQuizType] = useState('QUIZ_1'); 
           const [quizResult, setQuizResult] = useState(null);
+          const [quizFeedback, setQuizFeedback] = useState(null); // 【新增】用于控制即时答题反馈UI
           const [timer, setTimer] = useState(10);
           const [countdown, setCountdown] = useState(3);
+          const [currentStage, setCurrentStage] = useState(1);
           
-          // === Refs ===
+          const [joystickPos, setJoystickPos] = useState({ x: 0, y: 0 });
+          const joystickBaseRef = useRef(null);
+          const joystickRef = useRef({ x: 0, y: 0 }); 
+
           const mountRef = useRef(null);
           const gameStateRef = useRef(gameState);
-          const quizTriggeredRef = useRef(false); 
+          
+          const currentStageRef = useRef(currentStage);
+          const quizResultRef = useRef(quizResult);
+          
+          const quiz1TriggeredRef = useRef(false); 
+          const quiz2TriggeredRef = useRef(false); 
+          const quiz1PassedRef = useRef(false); // 【新增】记录第一关是否回答正确
+          const quiz2PassedRef = useRef(false); // 【新增】记录第二关是否回答正确
+
+          const checkpointRef = useRef({ x: START_POS.x, y: START_POS.y, z: START_POS.z });
           
           const sceneRef = useRef(null);
           const cameraRef = useRef(null);
           const rendererRef = useRef(null);
           const playerRef = useRef(null);
           const hexesRef = useRef([]);
+          const turntablesRef = useRef([]); 
+          const shortcutRef = useRef(null); 
+          const pendulumsRef = useRef([]); 
           const ballsRef = useRef([]); 
           const lastFireTimeRef = useRef(0); 
           const keysRef = useRef({});
           const requestRef = useRef();
           const resizeObserverRef = useRef(null);
 
-          useEffect(() => {
-            gameStateRef.current = gameState;
-          }, [gameState]);
+          useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
+          useEffect(() => { currentStageRef.current = currentStage; }, [currentStage]);
+          useEffect(() => { quizResultRef.current = quizResult; }, [quizResult]);
 
           // === 1. 初始化 3D 引擎 ===
           useEffect(() => {
@@ -95,8 +152,8 @@
               scene.fog = new THREE.Fog(0x38bdf8, 50, 200);
               sceneRef.current = scene;
 
-              let width = mountRef.current.clientWidth || window.innerWidth * 0.8;
-              let height = mountRef.current.clientHeight || window.innerHeight * 0.8;
+              let width = mountRef.current.clientWidth || window.innerWidth;
+              let height = mountRef.current.clientHeight || window.innerHeight;
 
               const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000); 
               camera.position.set(0, 10, 70); 
@@ -110,7 +167,6 @@
               rendererRef.current = renderer;
               mountRef.current.appendChild(renderer.domElement);
 
-              // 【兼容性修复】增加 ResizeObserver 的环境安全检查
               if (window.ResizeObserver) {
                 resizeObserverRef.current = new ResizeObserver(entries => {
                   for (let entry of entries) {
@@ -127,7 +183,6 @@
                 resizeObserverRef.current.observe(mountRef.current);
               }
 
-              // 光影
               const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
               scene.add(ambientLight);
               const sunLight = new THREE.DirectionalLight(0xfffaeb, 0.9);
@@ -141,7 +196,6 @@
               sunLight.shadow.camera.bottom = -80;
               scene.add(sunLight);
 
-              // 构建糖豆人角色
               const playerGroup = new THREE.Group();
               const skinMat = new THREE.MeshStandardMaterial({ color: 0xffb6c1, roughness: 0.3 }); 
               const shirtMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.5 }); 
@@ -204,67 +258,58 @@
                 limbs: { armL, armR, legL, legR },
                 targetRotationY: Math.PI,
                 camYaw: Math.PI,
-                backwardRunTime: 0 
+                backwardRunTime: 0,
+                onTurntable: false 
               };
 
-              // 生成安全路径 (不连续断点路线，缩减至约 10%)
+              // === 第一关 ===
               const safeIds = new Set();
               let currC = Math.floor(GRID_COLS / 2);
-              let lastRowHadSafe = true; 
               
               for (let r = 0; r < GRID_ROWS; r++) {
-                if (lastRowHadSafe && Math.random() < 0.45) {
-                  lastRowHadSafe = false;
+                // 将正确道路的比例调整到大概占 15% (约 18 个安全块)
+                if (Math.random() < 0.1) {
+                  // 10% 概率空出一行不断连
                 } else {
                   safeIds.add(`hex-${r}-${currC}`);
-                  lastRowHadSafe = true;
-                  if (Math.random() < 0.3) {
+                  if (Math.random() < 0.4) {
                     const dir = Math.random() < 0.5 ? 1 : -1;
                     const nextC = currC + dir;
-                    if (nextC >= 0 && nextC < GRID_COLS) {
-                      currC = nextC;
-                    }
+                    if (nextC >= 0 && nextC < GRID_COLS) currC = nextC;
                   }
                 }
               }
 
-              // 生成巨型双层渐变色六边形及陷阱
               const hexes = [];
               const outerHexGeo = new THREE.CylinderGeometry(HEX_RADIUS, HEX_RADIUS, 1.0, 6);
               const innerHexGeo = new THREE.CylinderGeometry(HEX_RADIUS * 0.93, HEX_RADIUS * 0.93, 1.05, 6); 
               
-              const canvas = document.createElement('canvas');
-              canvas.width = 128; canvas.height = 128;
-              const ctx = canvas.getContext('2d');
-              const grad = ctx.createLinearGradient(0, 0, 128, 128);
-              grad.addColorStop(0, '#fbcfe8'); 
-              grad.addColorStop(1, '#be185d'); 
-              ctx.fillStyle = grad;
-              ctx.fillRect(0, 0, 128, 128);
-              const hexTexture = new THREE.CanvasTexture(canvas);
+              const hexCanvas = document.createElement('canvas');
+              hexCanvas.width = 128; hexCanvas.height = 128;
+              const hCtx = hexCanvas.getContext('2d');
+              const hGrad = hCtx.createLinearGradient(0, 0, 128, 128);
+              hGrad.addColorStop(0, '#fbcfe8'); hGrad.addColorStop(1, '#be185d'); 
+              hCtx.fillStyle = hGrad; hCtx.fillRect(0, 0, 128, 128);
+              const hexTexture = new THREE.CanvasTexture(hexCanvas);
               const innerMat = new THREE.MeshStandardMaterial({ map: hexTexture, roughness: 0.6 }); 
 
               for (let r = 0; r < GRID_ROWS; r++) {
                 for (let c = 0; c < GRID_COLS; c++) {
                   const id = `hex-${r}-${c}`;
                   const isSafe = safeIds.has(id);
-                  
-                  // 安全六边形赋予大概 15% 的几率成为陷阱，非安全块保持 22% 的几率
-                  const isTrap = isSafe ? Math.random() < 0.15 : Math.random() < 0.22; 
+                  // 陷阱概率整体降至 15%
+                  const isTrap = Math.random() < 0.15; 
                   
                   const hexGroup = new THREE.Group();
-                  
                   const outerMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
                   const outerHex = new THREE.Mesh(outerHexGeo, outerMat);
-                  outerHex.receiveShadow = true;
-                  outerHex.castShadow = true;
+                  outerHex.receiveShadow = true; outerHex.castShadow = true;
 
                   const uniqueInnerMat = innerMat.clone();
                   const innerHex = new THREE.Mesh(innerHexGeo, uniqueInnerMat);
                   innerHex.receiveShadow = true;
                   
-                  hexGroup.add(outerHex);
-                  hexGroup.add(innerHex);
+                  hexGroup.add(outerHex); hexGroup.add(innerHex);
 
                   const xOffset = (r % 2 === 0) ? 0 : (Math.sqrt(3) * HEX_RADIUS) / 2;
                   const x = (c - (GRID_COLS-1)/2) * (Math.sqrt(3) * HEX_RADIUS) + xOffset;
@@ -272,38 +317,243 @@
                   
                   hexGroup.position.set(x, 0, z);
                   scene.add(hexGroup);
-                  hexes.push({ 
-                    mesh: hexGroup, 
-                    outerMat: outerMat, 
-                    innerMat: uniqueInnerMat, 
-                    id, 
-                    isSafe, 
-                    isTrap,
-                    isGlowing: false, 
-                    status: 'STABLE', 
-                    shakeTime: 0, 
-                    origX: x 
-                  });
+                  hexes.push({ mesh: hexGroup, outerMat, innerMat: uniqueInnerMat, id, isSafe, isTrap, isGlowing: false, status: 'STABLE', shakeTime: 0, origX: x });
                 }
               }
               hexesRef.current = hexes;
 
-              // 起点与终点平台
               const startZone = new THREE.Mesh(new THREE.BoxGeometry(100, 1, 80), new THREE.MeshStandardMaterial({ color: 0xa855f7 }));
               startZone.position.set(0, -0.5, 48.5); 
               startZone.receiveShadow = true;
               scene.add(startZone);
 
-              const triggerLine = new THREE.Mesh(new THREE.BoxGeometry(100, 1.1, 3), new THREE.MeshStandardMaterial({ color: 0xfacc15 }));
-              triggerLine.position.set(0, -0.5, QUIZ_TRIGGER_Z);
-              scene.add(triggerLine);
+              const triggerLine1 = new THREE.Mesh(new THREE.BoxGeometry(100, 1.1, 3), new THREE.MeshStandardMaterial({ color: 0xfacc15 }));
+              triggerLine1.position.set(0, -0.5, QUIZ1_TRIGGER_Z);
+              scene.add(triggerLine1);
 
-              const endZone = new THREE.Mesh(new THREE.BoxGeometry(100, 1, 80), new THREE.MeshStandardMaterial({ color: 0x22c55e }));
-              endZone.position.set(0, -0.5, -330); 
-              endZone.receiveShadow = true;
-              scene.add(endZone);
+              const endZone1 = new THREE.Mesh(new THREE.BoxGeometry(100, 1, 90), new THREE.MeshStandardMaterial({ color: 0x22c55e }));
+              endZone1.position.set(0, -0.5, -335); 
+              endZone1.receiveShadow = true;
+              scene.add(endZone1);
 
-              // 渲染与发光动画
+
+              // === 构建第二关：极其疯狂的高速旋转圆盘与滚木 ===
+              const turntables = [];
+              const tex1 = createPieTexture('#3b82f6', '#1d4ed8'); 
+              const tex2 = createPieTexture('#8b5cf6', '#4338ca'); 
+              const tex3 = createPieTexture('#ec4899', '#be185d'); 
+              const mats = [
+                  new THREE.MeshStandardMaterial({ map: tex1, roughness: 0.5 }),
+                  new THREE.MeshStandardMaterial({ map: tex2, roughness: 0.5 }),
+                  new THREE.MeshStandardMaterial({ map: tex3, roughness: 0.5 })
+              ];
+
+              const addStandardObstacle = (group, radius) => {
+                  if (Math.random() < 0.6) { 
+                      const obsGeo = new THREE.CylinderGeometry(0.8, 0.8, radius * 1.8, 16);
+                      const obsMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.6 });
+                      const obsMesh = new THREE.Mesh(obsGeo, obsMat);
+                      obsMesh.rotation.z = Math.PI / 2; 
+                      obsMesh.position.y = 1.0; 
+                      obsMesh.castShadow = true;
+                      group.add(obsMesh);
+                      return [{ x: 0, z: 0, halfX: radius * 0.9, halfZ: 0.8, align: 'X' }];
+                  }
+                  return [];
+              };
+
+              const addCrossObstacles = (group, radius) => {
+                  const obsMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.6 });
+                  const obs1 = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, radius * 1.8, 16), obsMat);
+                  obs1.rotation.z = Math.PI / 2; obs1.position.y = 1.0; obs1.castShadow = true; group.add(obs1);
+                  
+                  const obs2 = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, radius * 1.8, 16), obsMat);
+                  obs2.rotation.x = Math.PI / 2; obs2.position.y = 1.0; obs2.castShadow = true; group.add(obs2);
+
+                  return [
+                      { x: 0, z: 0, halfX: radius * 0.9, halfZ: 0.8, align: 'X' },
+                      { x: 0, z: 0, halfX: 0.8, halfZ: radius * 0.9, align: 'Z' }
+                  ];
+              };
+
+              const addSegmentedObstacles = (group, innerRadius, outerRadius) => {
+                  const obsMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.6 });
+                  const length = outerRadius - innerRadius - 2; 
+                  const centerDist = innerRadius + (outerRadius - innerRadius) / 2;
+
+                  const hitboxes = [];
+                  const configs = [
+                      { x: centerDist, z: 0, rz: Math.PI / 2, rx: 0, align: 'X' },
+                      { x: -centerDist, z: 0, rz: Math.PI / 2, rx: 0, align: 'X' },
+                      { x: 0, z: centerDist, rz: 0, rx: Math.PI / 2, align: 'Z' },
+                      { x: 0, z: -centerDist, rz: 0, rx: Math.PI / 2, align: 'Z' },
+                  ];
+
+                  configs.forEach(cfg => {
+                      const obs = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, length, 16), obsMat);
+                      obs.rotation.z = cfg.rz; obs.rotation.x = cfg.rx;
+                      obs.position.set(cfg.x, 1.0, cfg.z);
+                      obs.castShadow = true;
+                      group.add(obs);
+                      hitboxes.push({
+                          x: cfg.x, z: cfg.z,
+                          halfX: cfg.align === 'X' ? length / 2 : 0.8,
+                          halfZ: cfg.align === 'Z' ? length / 2 : 0.8,
+                          align: cfg.align
+                      });
+                  });
+                  return hitboxes;
+              };
+
+              const addTurntable = (x, z, radius, mat, speed) => {
+                  const group = new THREE.Group();
+                  group.position.set(x, 0, z);
+                  const geo = new THREE.CylinderGeometry(radius, radius, 1.0, 32);
+                  const mesh = new THREE.Mesh(geo, mat);
+                  mesh.receiveShadow = true;
+                  mesh.castShadow = true;
+                  group.add(mesh);
+
+                  let hitboxes = [];
+                  if (turntables.length > 1) {
+                      hitboxes = addStandardObstacle(group, radius);
+                  }
+
+                  scene.add(group);
+                  turntables.push({ group, x, z, r: radius, speed, hitboxes });
+              };
+
+              addTurntable(0, -400, 12, mats[0], 0.035);
+              addTurntable(0, -424, 12, mats[1], -0.04);
+
+              const forkCoords = [
+                  {x: 18, z: -444}, 
+                  {x: 34, z: -464}, 
+                  {x: 48, z: -486}, 
+                  {x: 60, z: -510}, 
+                  {x: 70, z: -535}, 
+                  {x: 70, z: -560}, 
+                  {x: 70, z: -585}, 
+                  {x: 60, z: -610}, 
+                  {x: 46, z: -634}, 
+                  {x: 28, z: -656}  
+              ];
+
+              for(let i = 0; i < 10; i++) {
+                  const pos = forkCoords[i];
+                  const speedL = (i % 2 === 0 ? 1 : -1) * (0.025 + Math.random() * 0.02);
+                  const speedR = (i % 2 === 0 ? -1 : 1) * (0.025 + Math.random() * 0.02);
+                  addTurntable(-pos.x, pos.z, 12, mats[i % 3], speedL);
+                  addTurntable(pos.x, pos.z, 12, mats[(i + 1) % 3], speedR);
+              }
+
+              addTurntable(0, -685, 20, mats[2], 0.03);
+              turntablesRef.current = turntables;
+
+
+              // === 构建第二关：大摆锤 (Pendulums) ===
+              const pendulums = [];
+              const pPoleMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8, roughness: 0.2 });
+              const pHeadMat = new THREE.MeshStandardMaterial({ color: 0xf43f5e, metalness: 0.3, roughness: 0.4 });
+              const pPivotMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
+
+              const addPendulum = (x, z, delay) => {
+                  const pivot = new THREE.Group();
+                  pivot.position.set(x, 22, z); // 支点在高空
+                  
+                  // 支点底座
+                  const pivotBox = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), pPivotMat);
+                  pivotBox.castShadow = true;
+                  pivot.add(pivotBox);
+                  
+                  // 摆杆
+                  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 20, 16), pPoleMat);
+                  pole.position.y = -10;
+                  pole.castShadow = true;
+                  pivot.add(pole);
+                  
+                  // 致命重锤
+                  const head = new THREE.Mesh(new THREE.SphereGeometry(3.5, 32, 32), pHeadMat);
+                  head.position.y = -20;
+                  head.castShadow = true;
+                  pivot.add(head);
+                  
+                  scene.add(pivot);
+                  pendulums.push({ pivot, head, delay });
+              };
+
+              addPendulum(-70, -560, 400);   
+              addPendulum(70, -560, 1200);   
+              addPendulum(0, -560, 800);     
+              addPendulum(0, -685, 1600);    
+              pendulumsRef.current = pendulums;
+
+
+              // === 构建第二关：捷径大转盘 ===
+              const texG1 = createPieTexture('#fbbf24', '#b45309');
+              const texG2 = createPieTexture('#fcd34d', '#d97706');
+              const matG1 = new THREE.MeshStandardMaterial({ map: texG1, roughness: 0.4, metalness: 0.5 });
+              const matG2 = new THREE.MeshStandardMaterial({ map: texG2, roughness: 0.4, metalness: 0.5 });
+              
+              const shortcutGroup = new THREE.Group();
+              shortcutGroup.position.set(0, 0, -560);
+              shortcutGroup.visible = false;
+
+              const createLayer = (radius, height, mat, type, innerR = 0) => {
+                  const g = new THREE.Group();
+                  const m = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 1.0, 48), mat);
+                  m.receiveShadow = true; m.castShadow = true;
+                  g.add(m);
+                  g.position.y = height;
+                  
+                  let hitboxes = [];
+                  if (type === 'INNER') hitboxes = addCrossObstacles(g, radius);
+                  else if (type === 'SEGMENTED') hitboxes = addSegmentedObstacles(g, innerR, radius);
+                  
+                  shortcutGroup.add(g);
+                  return { group: g, r: radius, hitboxes };
+              };
+
+              const l1 = createLayer(50, 0, matG1, 'SEGMENTED', 35);
+              const l2 = createLayer(35, 0.05, matG2, 'SEGMENTED', 20);
+              const l3 = createLayer(20, 0.1, matG1, 'INNER');
+              scene.add(shortcutGroup);
+
+              const bridgesGroup = new THREE.Group();
+              const bridgeMat = new THREE.MeshStandardMaterial({color: 0x8b5cf6});
+              
+              const b1 = new THREE.Mesh(new THREE.BoxGeometry(6, 1.0, 74), bridgeMat);
+              b1.position.set(0, 0, -473); b1.receiveShadow = true; b1.castShadow = true;
+              
+              const b2 = new THREE.Mesh(new THREE.BoxGeometry(16, 1.0, 55), bridgeMat);
+              b2.position.set(0, 0, -637.5); b2.receiveShadow = true; b2.castShadow = true;
+              
+              bridgesGroup.add(b1, b2);
+              bridgesGroup.visible = false;
+              scene.add(bridgesGroup);
+
+              shortcutRef.current = {
+                  mainGroup: shortcutGroup,
+                  bridgesGroup: bridgesGroup,
+                  active: false,
+                  x: 0, z: -560, y: 0,
+                  layers: [
+                      { ...l1, speed: 0.008 },  
+                      { ...l2, speed: -0.045 }, 
+                      { ...l3, speed: 0.065 }   
+                  ]
+              };
+
+              const triggerLine2 = new THREE.Mesh(new THREE.BoxGeometry(30, 1.1, 3), new THREE.MeshStandardMaterial({ color: 0xfacc15 }));
+              triggerLine2.position.set(0, -0.5, QUIZ2_TRIGGER_Z);
+              scene.add(triggerLine2);
+
+              const endZone2 = new THREE.Mesh(new THREE.BoxGeometry(100, 1, 80), new THREE.MeshStandardMaterial({ color: 0x10b981 }));
+              endZone2.position.set(0, -0.5, -745); 
+              endZone2.receiveShadow = true;
+              scene.add(endZone2);
+
+              // === 动画循环 ===
               const animate = () => {
                 requestRef.current = requestAnimationFrame(animate);
                 
@@ -320,10 +570,17 @@
                   }
                 });
 
-                // 摄像机逻辑 (延迟平滑转动追尾视角)
+                turntablesRef.current.forEach(disk => {
+                   disk.group.rotation.y -= disk.speed; 
+                });
+                if (shortcutRef.current && shortcutRef.current.active) {
+                   shortcutRef.current.layers.forEach(layer => {
+                       layer.group.rotation.y -= layer.speed;
+                   });
+                }
+
                 if (playerRef.current && playerRef.current.mesh) {
                   const playerCamYaw = playerRef.current.camYaw;
-                  
                   const camDist = 12; 
                   const camHeight = 7; 
                   const targetCamPos = new THREE.Vector3(
@@ -339,13 +596,10 @@
                     playerRef.current.mesh.position.z + Math.cos(playerCamYaw) * lookAhead
                   );
 
-                  if (!cameraRef.current.lookAtTarget) {
-                    cameraRef.current.lookAtTarget = new THREE.Vector3().copy(targetLookAt);
-                  }
+                  if (!cameraRef.current.lookAtTarget) cameraRef.current.lookAtTarget = new THREE.Vector3().copy(targetLookAt);
 
                   camera.position.lerp(targetCamPos, 0.1); 
                   cameraRef.current.lookAtTarget.lerp(targetLookAt, 0.1); 
-                  
                   camera.lookAt(cameraRef.current.lookAtTarget);
                 }
 
@@ -369,9 +623,7 @@
             return () => {
               isMounted = false;
               cancelAnimationFrame(requestRef.current);
-              if (resizeObserverRef.current && mountRef.current) {
-                 resizeObserverRef.current.disconnect();
-              }
+              if (resizeObserverRef.current && mountRef.current) resizeObserverRef.current.disconnect();
               if (rendererRef.current && mountRef.current) {
                  if (mountRef.current.contains(rendererRef.current.domElement)) {
                      mountRef.current.removeChild(rendererRef.current.domElement);
@@ -380,37 +632,156 @@
             };
           }, []);
 
+          // === 虚拟摇杆与触控处理 ===
+          const getJoystickTouch = (touches) => {
+              for(let i=0; i<touches.length; i++) {
+                  const t = touches[i];
+                  if (t.target.id === 'joystick-zone' || (t.target.closest && t.target.closest('#joystick-zone'))) return t;
+              }
+              return null;
+          };
+
+          const handleTouchMove = useCallback((e) => {
+              if (!joystickBaseRef.current) return;
+              const touch = getJoystickTouch(e.touches);
+              if (!touch) return;
+              const rect = joystickBaseRef.current.getBoundingClientRect();
+              const centerX = rect.left + rect.width / 2;
+              const centerY = rect.top + rect.height / 2;
+              const maxDist = (rect.width / 2) - 24; 
+
+              let dx = touch.clientX - centerX;
+              let dy = touch.clientY - centerY;
+              const dist = Math.sqrt(dx * dx + dy * dy);
+
+              if (dist > maxDist) {
+                  dx = (dx / dist) * maxDist;
+                  dy = (dy / dist) * maxDist;
+              }
+              setJoystickPos({ x: dx, y: dy });
+              joystickRef.current = { x: dx / maxDist, y: dy / maxDist };
+          }, []);
+
+          const handleTouchEnd = useCallback((e) => {
+              const touch = getJoystickTouch(e.touches);
+              if (!touch) {
+                 setJoystickPos({ x: 0, y: 0 });
+                 joystickRef.current = { x: 0, y: 0 };
+              }
+          }, []);
+
+          const handleJumpStart = () => { keysRef.current[' '] = true; };
+          const handleJumpEnd = () => { keysRef.current[' '] = false; };
+
+          // 【核心修复：多层动态防穿模碰撞检测】
+          const checkObstacleCollision = (player, diskGroup, hitboxes, cx, cz, diskSpeed = 0) => {
+              if (!hitboxes || hitboxes.length === 0) return false;
+              
+              const playerPosLocal = new window.THREE.Vector3(player.mesh.position.x - cx, 0, player.mesh.position.z - cz);
+              playerPosLocal.applyAxisAngle(new window.THREE.Vector3(0, 1, 0), -diskGroup.rotation.y);
+
+              if (player.mesh.position.y >= 2.8) return false; 
+
+              for (let box of hitboxes) {
+                  const dx = playerPosLocal.x - box.x;
+                  const dz = playerPosLocal.z - box.z;
+
+                  let dynamicHalfX = box.halfX;
+                  let dynamicHalfZ = box.halfZ;
+                  let sweepDist = 0;
+
+                  if (box.align === 'X') {
+                      sweepDist = Math.abs(diskSpeed) * Math.abs(playerPosLocal.x);
+                      dynamicHalfZ += sweepDist + 0.4; 
+                  } else if (box.align === 'Z') {
+                      sweepDist = Math.abs(diskSpeed) * Math.abs(playerPosLocal.z);
+                      dynamicHalfX += sweepDist + 0.4;
+                  }
+
+                  if (Math.abs(dx) < dynamicHalfX && Math.abs(dz) < dynamicHalfZ) {
+                       let pushSignX = 0, pushSignZ = 0;
+                       
+                       if (box.align === 'X') {
+                           let pushSign = dz >= 0 ? 1 : -1;
+                           const sweepDir = -Math.sign(diskSpeed * playerPosLocal.x);
+                           if (sweepDir !== 0 && sweepDist > 0.05) pushSign = sweepDir;
+                           
+                           playerPosLocal.z = box.z + pushSign * (dynamicHalfZ + 0.05);
+                           pushSignZ = pushSign;
+                       } else if (box.align === 'Z') {
+                           let pushSign = dx >= 0 ? 1 : -1;
+                           const sweepDir = Math.sign(diskSpeed * playerPosLocal.z);
+                           if (sweepDir !== 0 && sweepDist > 0.05) pushSign = sweepDir;
+                           
+                           playerPosLocal.x = box.x + pushSign * (dynamicHalfX + 0.05);
+                           pushSignX = pushSign;
+                       }
+
+                       const correctedWorldPos = playerPosLocal.clone().applyAxisAngle(new window.THREE.Vector3(0, 1, 0), diskGroup.rotation.y);
+                       player.mesh.position.x = cx + correctedWorldPos.x;
+                       player.mesh.position.z = cz + correctedWorldPos.z;
+
+                       const pushLocal = new window.THREE.Vector3(pushSignX, 0, pushSignZ);
+                       pushLocal.applyAxisAngle(new window.THREE.Vector3(0, 1, 0), diskGroup.rotation.y);
+                       
+                       player.knockback.set(pushLocal.x * 0.8, 0, pushLocal.z * 0.8);
+                       if (player.vel.y <= 0) player.vel.y = 0.25;
+                       return true;
+                  }
+              }
+              return false;
+          };
+
           // === 物理与碰撞逻辑 ===
           const updatePhysics = (THREE) => {
             const player = playerRef.current;
             if (!player || !player.mesh) return;
 
-            // 调整人物的重量感与惯性
-            const maxSpeed = 0.46; 
-            const accel = 0.018;   
+            const maxSpeed = player.onTurntable ? 0.40 : 0.46; 
+            const accel = player.onTurntable ? 0.016 : 0.018;   
             const friction = 0.97; 
             const jumpForce = 0.52; 
             const gravity = 0.025; 
 
             let isMoving = false;
             let currentlyGrounded = false; 
-
-            // 生成红球逻辑
             const timeNow = Date.now();
-            if (timeNow - lastFireTimeRef.current > 2000) { 
+
+            // === 碰撞检测：大摆锤 (Pendulums) ===
+            pendulumsRef.current.forEach(p => {
+                p.pivot.rotation.z = Math.sin((timeNow + p.delay) * 0.0018) * (Math.PI / 2.2);
+                p.pivot.updateMatrixWorld(true);
+                
+                const headPos = new window.THREE.Vector3();
+                p.head.getWorldPosition(headPos);
+                
+                const dx = player.mesh.position.x - headPos.x;
+                const dy = player.mesh.position.y - headPos.y;
+                const dz = player.mesh.position.z - headPos.z;
+                const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                
+                if (dist < 4.6) {
+                    const horizontalDist = Math.sqrt(dx*dx + dz*dz);
+                    const pushDirX = horizontalDist > 0 ? dx / horizontalDist : (Math.random() - 0.5);
+                    const pushDirZ = horizontalDist > 0 ? dz / horizontalDist : 1;
+                    player.knockback.set(pushDirX * 3.5, 0, pushDirZ * 3.5);
+                    player.vel.y = 0.55; 
+                }
+            });
+
+
+            if (currentStageRef.current === 1 && timeNow - lastFireTimeRef.current > 2000) { 
                 const ball = new THREE.Mesh(new THREE.SphereGeometry(7, 32, 32), new THREE.MeshStandardMaterial({color: 0xef4444, roughness: 0.4}));
-                ball.position.set((Math.random() - 0.5) * 60, 7, GOAL_Z + 15); 
+                ball.position.set((Math.random() - 0.5) * 60, 7, -300 + 15); 
                 ball.castShadow = true;
                 sceneRef.current.add(ball);
                 ballsRef.current.push({ mesh: ball, active: true });
                 lastFireTimeRef.current = timeNow;
             }
 
-            // 更新红球与碰撞
             ballsRef.current.forEach(ball => {
                 if (!ball.active) return;
-                ball.mesh.position.z += 0.9; 
-                ball.mesh.rotation.x += 0.1; 
+                ball.mesh.position.z += 0.9; ball.mesh.rotation.x += 0.1; 
 
                 const dx = player.mesh.position.x - ball.mesh.position.x;
                 const dy = player.mesh.position.y - ball.mesh.position.y;
@@ -427,22 +798,26 @@
 
                 if (ball.mesh.position.z > START_POS.z + 10) { 
                     sceneRef.current.remove(ball.mesh);
+                    ball.mesh.geometry.dispose();
+                    ball.mesh.material.dispose();
                     ball.active = false;
                 }
             });
             ballsRef.current = ballsRef.current.filter(b => b.active);
 
-            // 玩家移动与惯性
-            let inputX = 0;
-            let inputZ = 0;
-            if (keysRef.current['w'] || keysRef.current['arrowup']) { inputZ -= 1; isMoving = true; }
-            if (keysRef.current['s'] || keysRef.current['arrowdown']) { inputZ += 1; isMoving = true; }
-            if (keysRef.current['a'] || keysRef.current['arrowleft']) { inputX -= 1; isMoving = true; }
-            if (keysRef.current['d'] || keysRef.current['arrowright']) { inputX += 1; isMoving = true; }
+            let inputX = joystickRef.current.x;
+            let inputZ = joystickRef.current.y;
+            
+            if (keysRef.current['w'] || keysRef.current['arrowup']) inputZ -= 1; 
+            if (keysRef.current['s'] || keysRef.current['arrowdown']) inputZ += 1; 
+            if (keysRef.current['a'] || keysRef.current['arrowleft']) inputX -= 1; 
+            if (keysRef.current['d'] || keysRef.current['arrowright']) inputX += 1; 
 
-            if (isMoving) {
-                // 贴合摄像机视角的移动方向
-                const dir = new THREE.Vector3(inputX, 0, inputZ).normalize();
+            if (inputX !== 0 || inputZ !== 0) {
+                isMoving = true;
+                const length = Math.sqrt(inputX * inputX + inputZ * inputZ);
+                const scale = length > 1 ? 1 / length : 1;
+                const dir = new THREE.Vector3(inputX * scale, 0, inputZ * scale);
                 dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.camYaw - Math.PI);
 
                 player.vel.x += dir.x * accel;
@@ -450,46 +825,33 @@
                 player.targetRotationY = Math.atan2(player.vel.x, player.vel.z);
             }
 
-            // 计算当前运动方向与摄像机朝向的角度差
             let yawDiff = player.targetRotationY - player.camYaw;
             while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
             while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
-            
-            // 判断是否正在大角度向后/侧后方移动
             const isRunningBackwards = Math.abs(yawDiff) > Math.PI * 0.55;
 
-            // 累加向后跑的时间 (以 60fps 约 16.6ms 为步长)
-            if (isMoving && isRunningBackwards) {
-                player.backwardRunTime += 16.6;
-            } else {
-                player.backwardRunTime = 0; 
-            }
+            if (isMoving && isRunningBackwards) player.backwardRunTime += 16.6;
+            else player.backwardRunTime = 0; 
 
-            // 动态调整摄像机平滑系数
             let camLerpFactor = 0.03;
             if (isRunningBackwards) {
-                if (player.backwardRunTime < 500) {
-                    camLerpFactor = 0;
-                } else {
-                    camLerpFactor = Math.min(0.03, ((player.backwardRunTime - 500) / 1000) * 0.03);
-                }
+                if (player.backwardRunTime < 500) camLerpFactor = 0;
+                else camLerpFactor = Math.min(0.03, ((player.backwardRunTime - 500) / 1000) * 0.03);
             }
 
             player.camYaw += yawDiff * camLerpFactor;
-
             player.vel.x *= friction;
             player.vel.z *= friction;
 
-            const currentSpeed = Math.sqrt(player.vel.x * player.vel.x + player.vel.z * player.vel.z);
-            if (currentSpeed > maxSpeed) {
-                player.vel.x = (player.vel.x / currentSpeed) * maxSpeed;
-                player.vel.z = (player.vel.z / currentSpeed) * maxSpeed;
+            const currentSpeedLimit = Math.sqrt(player.vel.x * player.vel.x + player.vel.z * player.vel.z);
+            if (currentSpeedLimit > maxSpeed) {
+                player.vel.x = (player.vel.x / currentSpeedLimit) * maxSpeed;
+                player.vel.z = (player.vel.z / currentSpeedLimit) * maxSpeed;
             }
 
             player.mesh.position.x += player.vel.x;
             player.mesh.position.z += player.vel.z;
             
-            // 让人物身体的转动也增加一点点厚重感
             let diff = player.targetRotationY - player.mesh.rotation.y;
             while (diff < -Math.PI) diff += Math.PI * 2;
             while (diff > Math.PI) diff -= Math.PI * 2;
@@ -497,134 +859,183 @@
 
             player.mesh.position.add(player.knockback);
             player.knockback.multiplyScalar(0.85); 
-            
             player.vel.y -= gravity;
             player.mesh.position.y += player.vel.y;
 
-            // 碰撞检测与陷阱触发
+            // === 碰撞检测：第一关六边形 ===
             let closestHex = null;
-            let minDist = Infinity;
+            let minHexDist = Infinity;
             hexesRef.current.forEach(hex => {
               if (hex.status === 'FALLING') return;
               const dx = player.mesh.position.x - hex.mesh.position.x;
               const dz = player.mesh.position.z - hex.mesh.position.z;
               const dist = Math.sqrt(dx*dx + dz*dz);
-              if (dist < minDist) {
-                minDist = dist;
+              if (dist < minHexDist) {
+                minHexDist = dist;
                 closestHex = hex;
               }
             });
 
-            if (closestHex && minDist < HEX_RADIUS * 1.15) { 
+            if (closestHex && minHexDist < HEX_RADIUS * 1.15) { 
               const floorHeight = closestHex.mesh.position.y + 1.5; 
               if (player.mesh.position.y <= floorHeight && player.mesh.position.y >= floorHeight - 3.0 && player.vel.y <= 0) {
-                player.mesh.position.y = floorHeight;
-                player.vel.y = 0;
-                currentlyGrounded = true; 
-                
+                player.mesh.position.y = floorHeight; player.vel.y = 0; currentlyGrounded = true; 
                 if (closestHex.status === 'STABLE') {
                   if (closestHex.isTrap) {
-                    // 触发陷阱变红 
-                    closestHex.outerMat.color.setHex(0xff0000);
-                    closestHex.outerMat.emissive.setHex(0xff0000);
-                    closestHex.outerMat.emissiveIntensity = 1;
-                    closestHex.innerMat.emissive.setHex(0xff0000);
-                    closestHex.innerMat.emissiveIntensity = 0.5;
-
+                    closestHex.outerMat.color.setHex(0xff0000); closestHex.outerMat.emissive.setHex(0xff0000); closestHex.outerMat.emissiveIntensity = 1; closestHex.innerMat.emissive.setHex(0xff0000); closestHex.innerMat.emissiveIntensity = 0.5;
                     const rand = Math.random();
-                    if (rand < 0.33) {
-                      player.vel.y = 1.1; // 极高弹飞
-                    } else if (rand < 0.66) {
-                      player.knockback.set((Math.random() - 0.5) * 2, 0, 7); // 后退击飞
-                      player.vel.y = 0.45;
-                    } else {
-                      player.knockback.set((Math.random() - 0.5) * 2, 0, -7); // 极速冲刺
-                      player.vel.y = 0.45;
-                    }
-                    
-                    closestHex.status = 'SHAKING';
-                    closestHex.shakeTime = Date.now();
-                    
+                    if (rand < 0.33) player.vel.y = 1.1; 
+                    else if (rand < 0.66) { player.knockback.set((Math.random() - 0.5) * 2, 0, 7); player.vel.y = 0.45; }
+                    else { player.knockback.set((Math.random() - 0.5) * 2, 0, -7); player.vel.y = 0.45; }
+                    closestHex.status = 'SHAKING'; closestHex.shakeTime = Date.now();
                   } else if (!closestHex.isSafe) {
-                    // 普通的危险块：沼泽泥潭阻力
-                    player.vel.x *= 0.3; 
-                    player.vel.z *= 0.3;
-                    
-                    closestHex.status = 'SHAKING';
-                    closestHex.shakeTime = Date.now();
+                    player.vel.x *= 0.3; player.vel.z *= 0.3;
+                    closestHex.status = 'SHAKING'; closestHex.shakeTime = Date.now();
                   }
                 }
               }
             }
 
-            // 塌陷动画 (极速塌陷)
             hexesRef.current.forEach(hex => {
               if (hex.status === 'SHAKING') {
                 const elapsed = Date.now() - hex.shakeTime;
                 hex.mesh.position.x = hex.origX + Math.sin(elapsed * 0.8) * 0.3; 
-                if (elapsed > 150) hex.status = 'FALLING'; 
+                if (elapsed > 150) {
+                  if (hex.isSafe) {
+                    hex.status = 'STABLE'; hex.isTrap = false; hex.mesh.position.x = hex.origX;
+                    if (hex.isGlowing) { hex.outerMat.color.setHex(0x34d399); hex.outerMat.emissive.setHex(0x34d399); hex.innerMat.emissive.setHex(0x34d399); } 
+                    else { hex.outerMat.color.setHex(0xffffff); hex.outerMat.emissive.setHex(0x000000); hex.innerMat.emissive.setHex(0x000000); }
+                  } else { hex.status = 'FALLING'; }
+                }
               } else if (hex.status === 'FALLING') {
-                hex.mesh.position.y -= 1.8; 
-                hex.mesh.rotation.x += 0.15;
+                hex.mesh.position.y -= 1.8; hex.mesh.rotation.x += 0.15;
               }
             });
 
-            // 安全区锁定
+            // === 碰撞检测：第二关转盘与滚木陷阱 ===
+            let isStandingOnTurntable = false;
+            let currentTurnSpeed = 0;
+            let turnCenterX = 0;
+            let turnCenterZ = 0;
+
+            // 1. 检测基础转盘
+            turntablesRef.current.forEach(disk => {
+                const dx = player.mesh.position.x - disk.x;
+                const dz = player.mesh.position.z - disk.z;
+                if (Math.sqrt(dx*dx + dz*dz) < disk.r) {
+                    checkObstacleCollision(player, disk.group, disk.hitboxes, disk.x, disk.z, disk.speed);
+                    
+                    const floorHeight = 1.5; 
+                    if (player.mesh.position.y <= floorHeight && player.mesh.position.y >= floorHeight - 3.0 && player.vel.y <= 0) {
+                        player.mesh.position.y = floorHeight; player.vel.y = 0; currentlyGrounded = true;
+                        isStandingOnTurntable = true; currentTurnSpeed = disk.speed; turnCenterX = disk.x; turnCenterZ = disk.z;
+                    }
+                }
+            });
+
+            // 2. 检测三层捷径大转盘及其独木桥
+            if (shortcutRef.current && shortcutRef.current.active) {
+                const disk = shortcutRef.current;
+                const dx = player.mesh.position.x - disk.x;
+                const dz = player.mesh.position.z - disk.z;
+                const dist = Math.sqrt(dx*dx + dz*dz);
+                
+                if (dist < disk.layers[0].r) { 
+                    let floorHeight = disk.y + 1.5; 
+                    let layerSpeed = 0;
+                    let targetLayer = disk.layers[0];
+                    
+                    if (dist < disk.layers[2].r) { floorHeight += 0.1; layerSpeed = disk.layers[2].speed; targetLayer = disk.layers[2]; }
+                    else if (dist < disk.layers[1].r) { floorHeight += 0.05; layerSpeed = disk.layers[1].speed; targetLayer = disk.layers[1]; }
+                    else { layerSpeed = disk.layers[0].speed; }
+
+                    checkObstacleCollision(player, targetLayer.group, targetLayer.hitboxes, disk.x, disk.z, layerSpeed);
+
+                    if (player.mesh.position.y <= floorHeight && player.mesh.position.y >= floorHeight - 3.0 && player.vel.y <= 0) {
+                        player.mesh.position.y = floorHeight; player.vel.y = 0; currentlyGrounded = true;
+                        isStandingOnTurntable = true; currentTurnSpeed = layerSpeed; turnCenterX = disk.x; turnCenterZ = disk.z;
+                    }
+                }
+
+                // 独木桥的碰撞检测
+                let onBridge = false;
+                const pX = Math.abs(player.mesh.position.x);
+                const pZ = player.mesh.position.z;
+                
+                if (pZ <= -436 && pZ >= -510 && pX < 3.0) {
+                    onBridge = true; // 窄桥
+                } else if (pZ <= -610 && pZ >= -665 && pX < 8.0) {
+                    onBridge = true; // 宽桥
+                }
+
+                if (onBridge) {
+                    const floorHeight = 1.5;
+                    if (player.mesh.position.y <= floorHeight && player.mesh.position.y >= floorHeight - 3.0 && player.vel.y <= 0) {
+                        player.mesh.position.y = floorHeight; player.vel.y = 0; currentlyGrounded = true;
+                    }
+                }
+            }
+            
+            player.onTurntable = isStandingOnTurntable;
+
+            if (isStandingOnTurntable && currentlyGrounded) {
+                const dx = player.mesh.position.x - turnCenterX;
+                const dz = player.mesh.position.z - turnCenterZ;
+                const angle = Math.atan2(dz, dx);
+                const dist = Math.sqrt(dx*dx + dz*dz);
+                const newAngle = angle + currentTurnSpeed; 
+                player.mesh.position.x = turnCenterX + dist * Math.cos(newAngle);
+                player.mesh.position.z = turnCenterZ + dist * Math.sin(newAngle);
+            }
+
+            // === 关卡进度与安全区 ===
+            if (player.mesh.position.z < -350 && checkpointRef.current.z > -350) {
+                checkpointRef.current = { x: 0, y: 1.5, z: -335 };
+                setCurrentStage(2);
+            }
+
             if (player.mesh.position.z > 8.5) {
               if (player.mesh.position.y <= 1.5 && player.mesh.position.y >= 0.5 && player.vel.y <= 0) {
-                player.mesh.position.y = 1.5;
-                player.vel.y = 0;
-                currentlyGrounded = true;
+                player.mesh.position.y = 1.5; player.vel.y = 0; currentlyGrounded = true;
               }
             }
-            if (player.mesh.position.z < -290.0) {
+            if (player.mesh.position.z <= -290.0 && player.mesh.position.z >= -385.0) {
               if (player.mesh.position.y <= 1.5 && player.mesh.position.y >= 0.5 && player.vel.y <= 0) {
-                player.mesh.position.y = 1.5;
-                player.vel.y = 0;
-                currentlyGrounded = true;
-                if (player.mesh.position.z < GOAL_Z) {
-                  setGameState('WIN');
-                }
+                player.mesh.position.y = 1.5; player.vel.y = 0; currentlyGrounded = true;
+              }
+            }
+            if (player.mesh.position.z < STAGE2_WIN_Z) {
+              if (player.mesh.position.y <= 1.5 && player.mesh.position.y >= 0.5 && player.vel.y <= 0) {
+                player.mesh.position.y = 1.5; player.vel.y = 0; currentlyGrounded = true;
+                setGameState('WIN');
               }
             }
 
-            // 落地跳跃硬直机制
-            if (!player.wasOnGround && currentlyGrounded) {
-              player.jumpCooldownUntil = Date.now() + 180;
-            }
-            player.wasOnGround = currentlyGrounded; 
-            player.onGround = currentlyGrounded;
+            if (!player.wasOnGround && currentlyGrounded) player.jumpCooldownUntil = Date.now() + 180;
+            player.wasOnGround = currentlyGrounded; player.onGround = currentlyGrounded;
 
             if (keysRef.current[' '] && player.onGround && Math.abs(player.vel.y) < 0.01 && Date.now() >= player.jumpCooldownUntil) {
-              player.vel.y = jumpForce;
-              player.onGround = false;
+              player.vel.y = jumpForce; player.onGround = false;
             }
 
-            // 肢体动画
             if (isMoving && player.onGround) {
               const animTime = Date.now() * 0.015;
-              player.limbs.armL.rotation.x = Math.sin(animTime) * 0.6;
-              player.limbs.armR.rotation.x = -Math.sin(animTime) * 0.6;
-              player.limbs.legL.rotation.x = -Math.sin(animTime) * 0.6;
-              player.limbs.legR.rotation.x = Math.sin(animTime) * 0.6;
+              player.limbs.armL.rotation.x = Math.sin(animTime) * 0.6; player.limbs.armR.rotation.x = -Math.sin(animTime) * 0.6;
+              player.limbs.legL.rotation.x = -Math.sin(animTime) * 0.6; player.limbs.legR.rotation.x = Math.sin(animTime) * 0.6;
             } else if (!player.onGround) {
-              player.limbs.armL.rotation.x = Math.PI / 4;
-              player.limbs.armR.rotation.x = Math.PI / 4;
-              player.limbs.legL.rotation.x = -Math.PI / 6;
-              player.limbs.legR.rotation.x = 0;
+              player.limbs.armL.rotation.x = Math.PI / 4; player.limbs.armR.rotation.x = Math.PI / 4;
+              player.limbs.legL.rotation.x = -Math.PI / 6; player.limbs.legR.rotation.x = 0;
             } else {
-              player.limbs.armL.rotation.x = 0;
-              player.limbs.armR.rotation.x = 0;
-              player.limbs.legL.rotation.x = 0;
-              player.limbs.legR.rotation.x = 0;
+              player.limbs.armL.rotation.x = 0; player.limbs.armR.rotation.x = 0;
+              player.limbs.legL.rotation.x = 0; player.limbs.legR.rotation.x = 0;
             }
 
-            // 答题触发
-            if (!quizTriggeredRef.current && player.mesh.position.z < QUIZ_TRIGGER_Z) {
-              quizTriggeredRef.current = true;
-              setGameState('QUIZ');
-              setTimer(10);
-              return; 
+            if (!quiz1TriggeredRef.current && player.mesh.position.z < QUIZ1_TRIGGER_Z && currentStageRef.current === 1) {
+              quiz1TriggeredRef.current = true; setQuizType('QUIZ_1'); setGameState('QUIZ'); setTimer(10); return; 
+            }
+
+            if (!quiz2TriggeredRef.current && player.mesh.position.z < QUIZ2_TRIGGER_Z && currentStageRef.current === 2) {
+              quiz2TriggeredRef.current = true; setQuizType('QUIZ_2'); setGameState('QUIZ'); setTimer(10); return; 
             }
 
             if (player.mesh.position.y < FALL_Y_THRESHOLD) handleFall();
@@ -634,101 +1045,103 @@
             const handleKeyDown = (e) => { if(e && e.key) keysRef.current[e.key.toLowerCase()] = true; };
             const handleKeyUp = (e) => { if(e && e.key) keysRef.current[e.key.toLowerCase()] = false; };
             const handleBlur = () => { keysRef.current = {}; };
-            window.addEventListener('keydown', handleKeyDown);
-            window.addEventListener('keyup', handleKeyUp);
-            window.addEventListener('blur', handleBlur);
-            return () => {
-              window.removeEventListener('keydown', handleKeyDown);
-              window.removeEventListener('keyup', handleKeyUp);
-              window.removeEventListener('blur', handleBlur);
-            };
+            window.addEventListener('keydown', handleKeyDown); window.addEventListener('keyup', handleKeyUp); window.addEventListener('blur', handleBlur);
+            return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp); window.removeEventListener('blur', handleBlur); };
           }, []);
 
-          const startGame = () => {
-            setGameState('START_COUNTDOWN');
-            setCountdown(3);
+          const startGame = async () => {
+            setGameState('START_COUNTDOWN'); setCountdown(3);
+            try {
+                const docEl = document.documentElement;
+                if (docEl.requestFullscreen) await docEl.requestFullscreen();
+                else if (docEl.webkitRequestFullscreen) await docEl.webkitRequestFullscreen();
+                if (window.screen && window.screen.orientation && window.screen.orientation.lock) await window.screen.orientation.lock('landscape');
+            } catch (err) { console.warn("自动旋转可能被拦截", err); }
           };
 
           const handleQuizAnswer = (ans) => {
-            const isCorrect = ans === 'C';
-            setQuizResult(isCorrect ? 'CORRECT' : 'WRONG');
-            setGameState('PLAYING_RESUME');
-
-            if (isCorrect && hexesRef.current.length > 0) {
-              hexesRef.current.forEach(hex => {
-                if (hex.isSafe) {
-                  hex.outerMat.color.setHex(0x34d399); 
-                  hex.outerMat.emissive.setHex(0x34d399); 
-                  hex.innerMat.emissive.setHex(0x34d399); 
-                  hex.isGlowing = true; 
+            let isCorrect = false;
+            if (quizType === 'QUIZ_1') {
+                isCorrect = ans === 'C';
+                setQuizResult(isCorrect ? 'CORRECT' : 'WRONG');
+                if (isCorrect) {
+                    quiz1PassedRef.current = true; // 【新增】记忆通关状态
+                    if (hexesRef.current.length > 0) {
+                        hexesRef.current.forEach(hex => {
+                            if (hex.isSafe) { hex.outerMat.color.setHex(0x34d399); hex.outerMat.emissive.setHex(0x34d399); hex.innerMat.emissive.setHex(0x34d399); hex.isGlowing = true; }
+                        });
+                    }
                 }
-              });
+            } else if (quizType === 'QUIZ_2') {
+                isCorrect = ans === 'A';
+                setQuizResult(isCorrect ? 'CORRECT' : 'WRONG');
+                if (isCorrect) {
+                    quiz2PassedRef.current = true; // 【新增】记忆通关状态
+                    if (shortcutRef.current) {
+                        shortcutRef.current.active = true;
+                        shortcutRef.current.mainGroup.visible = true;
+                        shortcutRef.current.bridgesGroup.visible = true;
+                        shortcutRef.current.mainGroup.position.y = -50;
+                        shortcutRef.current.bridgesGroup.position.y = -50;
+                        const elevateShortcut = () => {
+                            if(shortcutRef.current.mainGroup.position.y < 0) {
+                                shortcutRef.current.mainGroup.position.y += 2;
+                                shortcutRef.current.bridgesGroup.position.y += 2;
+                                requestAnimationFrame(elevateShortcut);
+                            } else {
+                                shortcutRef.current.mainGroup.position.y = 0;
+                                shortcutRef.current.bridgesGroup.position.y = 0;
+                            }
+                        }
+                        elevateShortcut();
+                    }
+                }
             }
+            
+            // 【新增】触发大屏反馈动画，延迟1.2秒后再恢复游戏
+            setQuizFeedback(isCorrect ? 'CORRECT' : 'WRONG');
+            setTimeout(() => {
+                setQuizFeedback(null);
+                setGameState('PLAYING_RESUME');
+            }, 1200);
           };
 
           const handleFall = () => {
             if (gameStateRef.current === 'FALLEN') return; 
-            gameStateRef.current = 'FALLEN'; 
-            setGameState('FALLEN');
-            
+            gameStateRef.current = 'FALLEN'; setGameState('FALLEN');
             setTimeout(() => {
               if (playerRef.current && playerRef.current.mesh) {
-                playerRef.current.mesh.position.set(START_POS.x, START_POS.y, START_POS.z);
-                playerRef.current.vel.set(0, 0, 0);
-                playerRef.current.knockback.set(0, 0, 0);
-                playerRef.current.mesh.rotation.y = Math.PI;
-                playerRef.current.targetRotationY = Math.PI;
-                playerRef.current.camYaw = Math.PI; 
-                playerRef.current.jumpCooldownUntil = 0; 
-                playerRef.current.backwardRunTime = 0; 
-                quizTriggeredRef.current = false; 
+                const cp = checkpointRef.current;
+                playerRef.current.mesh.position.set(cp.x, cp.y, cp.z);
+                playerRef.current.vel.set(0, 0, 0); playerRef.current.knockback.set(0, 0, 0);
+                playerRef.current.mesh.rotation.y = Math.PI; playerRef.current.targetRotationY = Math.PI; playerRef.current.camYaw = Math.PI; 
+                playerRef.current.jumpCooldownUntil = 0; playerRef.current.backwardRunTime = 0; 
               }
-              
               if (cameraRef.current && window.THREE) {
-                const resetRotY = Math.PI;
-                const camDist = 12;
-                const camHeight = 7;
-                const lookAhead = 10;
-                
-                cameraRef.current.position.set(
-                  START_POS.x - Math.sin(resetRotY) * camDist, 
-                  START_POS.y + camHeight, 
-                  START_POS.z - Math.cos(resetRotY) * camDist
-                );
-                
-                const resetLookAt = new window.THREE.Vector3(
-                  START_POS.x + Math.sin(resetRotY) * lookAhead,
-                  START_POS.y + 1.0,
-                  START_POS.z + Math.cos(resetRotY) * lookAhead
-                );
-                
-                cameraRef.current.lookAtTarget = resetLookAt;
-                cameraRef.current.lookAt(resetLookAt);
+                const cp = checkpointRef.current; const resetRotY = Math.PI;
+                cameraRef.current.position.set(cp.x - Math.sin(resetRotY) * 12, cp.y + 7, cp.z - Math.cos(resetRotY) * 12);
+                const resetLookAt = new window.THREE.Vector3(cp.x + Math.sin(resetRotY) * 10, cp.y + 1.0, cp.z + Math.cos(resetRotY) * 10);
+                cameraRef.current.lookAtTarget = resetLookAt; cameraRef.current.lookAt(resetLookAt);
               }
               
+              // 【新增核心修复】如果掉落时没有答对对应关卡的题目，重置答题触发器，允许二次答题！
+              if (!quiz1PassedRef.current) quiz1TriggeredRef.current = false;
+              if (!quiz2PassedRef.current) quiz2TriggeredRef.current = false;
+
               hexesRef.current.forEach(hex => {
-                hex.status = 'STABLE';
-                hex.shakeTime = 0;
-                hex.mesh.position.y = 0;
-                hex.mesh.rotation.x = 0;
-                hex.mesh.position.x = hex.origX;
-                
-                if (hex.isGlowing || hex.isTrap) {
-                  hex.isGlowing = false;
-                  hex.outerMat.color.setHex(0xffffff);
-                  hex.outerMat.emissive.setHex(0x000000);
-                  hex.outerMat.emissiveIntensity = 0;
-                  hex.innerMat.emissive.setHex(0x000000);
-                  hex.innerMat.emissiveIntensity = 0;
+                hex.status = 'STABLE'; hex.shakeTime = 0; hex.mesh.position.y = 0; hex.mesh.rotation.x = 0; hex.mesh.position.x = hex.origX;
+                if (currentStageRef.current === 1 && quizResultRef.current === 'CORRECT' && hex.isSafe) {
+                  hex.isGlowing = true; hex.outerMat.color.setHex(0x34d399); hex.outerMat.emissive.setHex(0x34d399); hex.innerMat.emissive.setHex(0x34d399); 
+                } else if (hex.isGlowing || hex.isTrap) {
+                  hex.isGlowing = false; hex.outerMat.color.setHex(0xffffff); hex.outerMat.emissive.setHex(0x000000); hex.outerMat.emissiveIntensity = 0; hex.innerMat.emissive.setHex(0x000000); hex.innerMat.emissiveIntensity = 0;
                 }
               });
-
-              ballsRef.current.forEach(ball => {
-                 if (sceneRef.current) sceneRef.current.remove(ball.mesh);
-              });
+              ballsRef.current.forEach(ball => { 
+                  if (sceneRef.current) sceneRef.current.remove(ball.mesh); 
+                  ball.mesh.geometry.dispose();
+                  ball.mesh.material.dispose();
+              }); 
               ballsRef.current = [];
-              
-              gameStateRef.current = 'PLAYING'; 
               setGameState('PLAYING');
             }, 1200);
           };
@@ -736,49 +1149,51 @@
           useEffect(() => {
             let interval;
             if (gameState === 'START_COUNTDOWN') {
-              if (countdown > 0) {
-                interval = setTimeout(() => setCountdown(c => c - 1), 1000);
-              } else {
-                setGameState('PLAYING');
-              }
-            } else if (gameState === 'QUIZ') {
-              if (timer > 0) {
-                interval = setTimeout(() => setTimer(t => t - 1), 1000);
-              } else {
-                handleQuizAnswer('TIMEOUT');
-              }
+              if (countdown > 0) interval = setTimeout(() => setCountdown(c => c - 1), 1000); else setGameState('PLAYING');
+            } else if (gameState === 'QUIZ' && !quizFeedback) { // 【新增】在反馈动画期间暂停倒计时
+              if (timer > 0) interval = setTimeout(() => setTimer(t => t - 1), 1000); else handleQuizAnswer('TIMEOUT');
             }
             return () => clearTimeout(interval);
-          }, [gameState, countdown, timer]);
+          }, [gameState, countdown, timer, quizFeedback]);
+
+          const showMobileControls = (gameState === 'PLAYING' || gameState === 'PLAYING_RESUME' || gameState === 'QUIZ');
 
           return (
-            <div className="flex flex-col items-center justify-center min-h-screen font-sans text-slate-800 overflow-hidden p-4">
-              <div className="relative w-full h-[82vh] max-w-6xl rounded-[2.5rem] overflow-hidden border-8 border-white shadow-[0_20px_50px_rgba(2,132,199,0.3)] bg-sky-400">
+            <div className="flex flex-col items-center justify-center min-h-screen font-sans text-slate-800 overflow-hidden md:p-4">
+              <div className="relative w-full h-[100dvh] md:h-[82vh] max-w-6xl md:rounded-[2.5rem] overflow-hidden md:border-8 border-white shadow-none md:shadow-[0_20px_50px_rgba(2,132,199,0.3)] bg-sky-400">
                 
                 <div ref={mountRef} className="absolute inset-0 z-0" />
+
+                {showMobileControls && (
+                  <>
+                    <div id="joystick-zone" ref={joystickBaseRef} onTouchStart={handleTouchMove} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchEnd} className="absolute bottom-8 left-8 w-36 h-36 bg-white/20 backdrop-blur-md rounded-full border-[3px] border-white/40 shadow-[inset_0_0_20px_rgba(255,255,255,0.2)] flex items-center justify-center z-50 md:hidden touch-none">
+                      <div className="w-14 h-14 bg-white/90 rounded-full shadow-[0_5px_15px_rgba(0,0,0,0.2)] pointer-events-none transition-transform duration-75" style={{ transform: `translate(${joystickPos.x}px, ${joystickPos.y}px)` }} />
+                    </div>
+                    <div onTouchStart={handleJumpStart} onTouchEnd={handleJumpEnd} onTouchCancel={handleJumpEnd} className="absolute bottom-10 right-10 w-28 h-28 bg-white/20 backdrop-blur-md rounded-full border-[3px] border-white/40 flex items-center justify-center z-50 md:hidden touch-none active:bg-white/40 active:scale-90 transition-all shadow-[0_5px_20px_rgba(0,0,0,0.15)]">
+                      <span className="text-white font-black text-2xl pointer-events-none tracking-widest drop-shadow-md">跳跃</span>
+                    </div>
+                  </>
+                )}
 
                 {gameState === 'LOADING' && (
                   <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-sky-500 text-white">
                      <Loader2 className="w-20 h-20 animate-spin text-white mb-6 drop-shadow-md" />
-                     <p className="text-3xl font-black tracking-widest animate-pulse drop-shadow-md">构建大型赛道...</p>
+                     <p className="text-3xl font-black tracking-widest animate-pulse drop-shadow-md">构建关卡世界...</p>
                   </div>
                 )}
 
                 {gameState === 'READY' && (
                   <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-sky-900/40 backdrop-blur-sm p-8 text-center transition-opacity duration-500">
-                    <h1 className="text-7xl font-black mb-16 italic tracking-tighter text-white drop-shadow-[0_8px_0_#0284c7]">阿噗向前冲!</h1>
-                    <button 
-                      onClick={startGame}
-                      className="px-16 py-6 bg-pink-400 text-white font-black text-4xl rounded-full hover:bg-pink-500 active:scale-95 shadow-[0_8px_0_#be185d] flex justify-center items-center gap-4 transition-all hover:scale-105"
-                    >
-                      <Play className="fill-current w-10 h-10" /> 开始游戏
+                    <h1 className="text-6xl md:text-7xl font-black mb-16 italic tracking-tighter text-white drop-shadow-[0_8px_0_#0284c7]">阿噗向前冲!</h1>
+                    <button onClick={startGame} className="px-12 md:px-16 py-5 md:py-6 bg-pink-400 text-white font-black text-3xl md:text-4xl rounded-full hover:bg-pink-500 active:scale-95 shadow-[0_8px_0_#be185d] flex justify-center items-center gap-4 transition-all hover:scale-105">
+                      <Play className="fill-current w-8 h-8 md:w-10 md:h-10" /> 开始游戏
                     </button>
                   </div>
                 )}
 
                 {gameState === 'START_COUNTDOWN' && (
                   <div className="absolute inset-0 z-40 flex flex-col items-center justify-center">
-                     <div className="text-[15rem] font-black text-white italic drop-shadow-[0_15px_0_#be185d] animate-ping">
+                     <div className="text-[12rem] md:text-[15rem] font-black text-white italic drop-shadow-[0_15px_0_#be185d] animate-ping">
                        {countdown > 0 ? countdown : 'GO!'}
                      </div>
                   </div>
@@ -788,8 +1203,8 @@
                   <div className="absolute top-6 left-0 right-0 flex justify-center z-10 pointer-events-none">
                     <div className="bg-white/90 border-4 border-sky-200 rounded-full px-8 py-3 flex items-center gap-3 shadow-xl">
                        <Trophy className="text-yellow-500 w-6 h-6" />
-                       <span className="font-black tracking-widest uppercase italic text-sky-800 text-lg">
-                         {quizTriggeredRef.current ? "小心陷阱与深渊!" : "冲向黄线区!"}
+                       <span className="font-black tracking-widest uppercase italic text-sky-800 text-base md:text-lg">
+                         第 {currentStage} 关：{currentStage === 1 ? "深渊迷阵" : "眩晕转盘"}
                        </span>
                     </div>
                   </div>
@@ -797,51 +1212,82 @@
 
                 {gameState === 'QUIZ' && (
                   <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-sky-900/60 backdrop-blur-md p-4 animate-in fade-in zoom-in duration-300">
-                    <div className="absolute top-10 flex gap-4 text-white font-black text-4xl drop-shadow-md">
-                        <Timer className={timer <= 3 ? "text-red-400 animate-pulse w-10 h-10" : "text-white w-10 h-10"} />
-                        {timer}s
-                    </div>
-                    <div className="bg-white border-8 border-pink-300 p-10 rounded-[2.5rem] shadow-2xl w-full max-w-xl">
-                      <div className="inline-block bg-pink-100 text-pink-600 px-4 py-1 rounded-full font-black uppercase tracking-widest text-sm mb-6">
-                         赛道问答
-                      </div>
-                      <h2 className="text-3xl font-black mb-10 text-slate-800 leading-tight">苏轼的字是（&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;）</h2>
-                      <div className="grid gap-4">
-                        {['A. 子由', 'B. 自由', 'C. 子瞻'].map((opt, i) => (
-                          <button
-                            key={i}
-                            onClick={() => handleQuizAnswer(opt[0])}
-                            className="w-full p-6 bg-sky-50 hover:bg-sky-500 hover:text-white rounded-2xl font-black text-xl text-left transition-colors flex justify-between items-center group border-4 border-sky-100 shadow-sm"
-                          >
-                            {opt}
-                            <ChevronRight className="opacity-0 group-hover:opacity-100 transition-opacity" size={28} />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                    
+                    {/* 【新增】即时反馈动效覆盖层 */}
+                    {quizFeedback ? (
+                        <div className="flex flex-col items-center animate-bounce">
+                            {quizFeedback === 'CORRECT' ? (
+                                <>
+                                    <CheckCircle className="text-green-400 w-24 h-24 mb-6 drop-shadow-lg" />
+                                    <span className="font-black text-green-400 text-5xl tracking-widest drop-shadow-lg">回答正确!</span>
+                                </>
+                            ) : (
+                                <>
+                                    <XCircle className="text-red-400 w-24 h-24 mb-6 drop-shadow-lg" />
+                                    <span className="font-black text-red-400 text-5xl tracking-widest drop-shadow-lg">回答错误!</span>
+                                </>
+                            )}
+                        </div>
+                    ) : (
+                        <>
+                            <div className="absolute top-10 flex gap-4 text-white font-black text-4xl drop-shadow-md">
+                                <Timer className={timer <= 3 ? "text-red-400 animate-pulse w-10 h-10" : "text-white w-10 h-10"} />
+                                {timer}s
+                            </div>
+                            <div className="bg-white border-8 border-pink-300 p-8 md:p-10 rounded-[2.5rem] shadow-2xl w-full max-w-xl">
+                              <div className="inline-block bg-pink-100 text-pink-600 px-4 py-1 rounded-full font-black uppercase tracking-widest text-sm mb-6">
+                                 赛道问答 - 第 {currentStage} 关
+                              </div>
+                              
+                              {quizType === 'QUIZ_1' ? (
+                                  <>
+                                    <h2 className="text-2xl md:text-3xl font-black mb-10 text-slate-800 leading-tight">苏轼的字是（&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;）</h2>
+                                    <div className="grid gap-4">
+                                      {['A. 子由', 'B. 自由', 'C. 子瞻'].map((opt) => (
+                                        <button key={opt} onClick={() => handleQuizAnswer(opt[0])} className="w-full p-5 md:p-6 bg-sky-50 hover:bg-sky-500 hover:text-white rounded-2xl font-black text-xl text-left transition-colors flex justify-between items-center group border-4 border-sky-100 shadow-sm">
+                                          {opt} <ChevronRight className="opacity-0 group-hover:opacity-100 transition-opacity" size={28} />
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </>
+                              ) : (
+                                  <>
+                                    <h2 className="text-2xl md:text-3xl font-black mb-10 text-slate-800 leading-tight">"莫听穿林打叶声"的下一句是（&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;）？</h2>
+                                    <div className="grid gap-4">
+                                      {['A. 何妨吟啸且徐行', 'B. 此处无声胜有声', 'C. 多少楼台烟雨中'].map((opt) => (
+                                        <button key={opt} onClick={() => handleQuizAnswer(opt[0])} className="w-full p-5 md:p-6 bg-sky-50 hover:bg-sky-500 hover:text-white rounded-2xl font-black text-xl text-left transition-colors flex justify-between items-center group border-4 border-sky-100 shadow-sm">
+                                          {opt} <ChevronRight className="opacity-0 group-hover:opacity-100 transition-opacity" size={28} />
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </>
+                              )}
+                            </div>
+                        </>
+                    )}
                   </div>
                 )}
 
                 {gameState === 'FALLEN' && (
                   <div className="absolute inset-0 z-40 bg-pink-500/30 flex items-center justify-center">
-                     <div className="bg-white border-8 border-pink-400 px-12 py-6 rounded-[3rem] text-pink-500 font-black text-5xl italic tracking-tighter shadow-2xl transform rotate-2 animate-bounce">
-                        淘汰! 重新出发!
+                     <div className="bg-white border-8 border-pink-400 px-8 md:px-12 py-5 md:py-6 rounded-[3rem] text-pink-500 font-black text-4xl md:text-5xl italic tracking-tighter shadow-2xl transform rotate-2 animate-bounce">
+                        淘汰! 回到最近安全区!
                      </div>
                   </div>
                 )}
 
                 {gameState === 'WIN' && (
                   <div className="absolute inset-0 z-50 bg-green-400 flex flex-col items-center justify-center p-8 text-white text-center">
-                    <Trophy size={140} className="mb-8 animate-bounce text-yellow-300 drop-shadow-xl" />
-                    <h2 className="text-7xl font-black italic mb-6 drop-shadow-[0_8px_0_#166534]">第一关达成！</h2>
-                    <div className="bg-white text-green-600 px-10 py-5 rounded-full font-black text-2xl animate-pulse shadow-xl border-4 border-green-200">
-                       超长赛道挑战成功！请等待第二关...
+                    <Trophy size={100} className="md:w-[140px] md:h-[140px] mb-8 animate-bounce text-yellow-300 drop-shadow-xl" />
+                    <h2 className="text-5xl md:text-7xl font-black italic mb-6 drop-shadow-[0_8px_0_#166534]">通关啦！</h2>
+                    <div className="bg-white text-green-600 px-8 md:px-10 py-4 md:py-5 rounded-full font-black text-xl md:text-2xl animate-pulse shadow-xl border-4 border-green-200">
+                       成功征服了深渊与转盘！
                     </div>
                   </div>
                 )}
               </div>
 
-              <div className="mt-6 flex flex-wrap justify-center gap-10 text-sky-700 text-sm font-black tracking-widest uppercase">
+              <div className="hidden md:flex mt-6 flex-wrap justify-center gap-10 text-sky-700 text-sm font-black tracking-widest uppercase">
                  <div className="flex items-center gap-4 bg-white px-6 py-3 rounded-2xl shadow-sm border border-sky-200">
                     <div className="flex flex-col items-center gap-1">
                        <kbd className="px-3 py-1 bg-slate-100 rounded-lg border-b-4 border-slate-300 text-slate-700">W</kbd>
@@ -851,11 +1297,11 @@
                           <kbd className="px-3 py-1 bg-slate-100 rounded-lg border-b-4 border-slate-300 text-slate-700">D</kbd>
                        </div>
                     </div>
-                    <span>慢速移动</span>
+                    <span>推杆 / 移动</span>
                  </div>
                  <div className="flex flex-col items-center justify-center gap-2 bg-white px-8 py-3 rounded-2xl shadow-sm border border-sky-200">
                     <kbd className="px-12 py-1 bg-slate-100 rounded-lg border-b-4 border-slate-300 text-slate-700">Space</kbd>
-                    <span>奋力跳跃</span>
+                    <span>跳跃过沟壑</span>
                  </div>
               </div>
             </div>
