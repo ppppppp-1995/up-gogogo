@@ -59,7 +59,6 @@
         const Play = ({ className, size = 24 }) => (
             <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         );
-        // 【新增】反馈动画所需的正确/错误图标
         const CheckCircle = ({ className, size = 24 }) => (
             <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
         );
@@ -75,9 +74,16 @@
 
         const START_POS = { x: 0, y: 1.5, z: 60 }; 
         const QUIZ1_TRIGGER_Z = 35; 
-        
         const QUIZ2_TRIGGER_Z = -422; 
         const STAGE2_WIN_Z = -700; 
+
+        // 皮肤配置字典
+        const SKINS = [
+            { id: 'classic', name: '海盐蓝', color: 0x38bdf8, hex: '#38bdf8' },
+            { id: 'sakura', name: '樱花粉', color: 0xf472b6, hex: '#f472b6' },
+            { id: 'golden', name: '炫闪金', color: 0xfbbf24, hex: '#fbbf24' },
+            { id: 'ninja', name: '暗影黑', color: 0x1e293b, hex: '#1e293b' }
+        ];
 
         // 绘制彩色扇形转盘
         const createPieTexture = (color1, color2) => {
@@ -99,11 +105,15 @@
           const [gameState, setGameState] = useState('LOADING'); 
           const [quizType, setQuizType] = useState('QUIZ_1'); 
           const [quizResult, setQuizResult] = useState(null);
-          const [quizFeedback, setQuizFeedback] = useState(null); // 【新增】用于控制即时答题反馈UI
+          const [quizFeedback, setQuizFeedback] = useState(null); 
           const [timer, setTimer] = useState(10);
           const [countdown, setCountdown] = useState(3);
           const [currentStage, setCurrentStage] = useState(1);
           
+          // 皮肤选择状态
+          const [activeSkin, setActiveSkin] = useState(SKINS[0]);
+          const playerMaterialsRef = useRef(null);
+
           const [joystickPos, setJoystickPos] = useState({ x: 0, y: 0 });
           const joystickBaseRef = useRef(null);
           const joystickRef = useRef({ x: 0, y: 0 }); 
@@ -116,8 +126,8 @@
           
           const quiz1TriggeredRef = useRef(false); 
           const quiz2TriggeredRef = useRef(false); 
-          const quiz1PassedRef = useRef(false); // 【新增】记录第一关是否回答正确
-          const quiz2PassedRef = useRef(false); // 【新增】记录第二关是否回答正确
+          const quiz1PassedRef = useRef(false); 
+          const quiz2PassedRef = useRef(false); 
 
           const checkpointRef = useRef({ x: START_POS.x, y: START_POS.y, z: START_POS.z });
           
@@ -138,6 +148,13 @@
           useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
           useEffect(() => { currentStageRef.current = currentStage; }, [currentStage]);
           useEffect(() => { quizResultRef.current = quizResult; }, [quizResult]);
+
+          // 实时换肤逻辑
+          useEffect(() => {
+              if (playerMaterialsRef.current && playerMaterialsRef.current.mainColorMat) {
+                  playerMaterialsRef.current.mainColorMat.color.setHex(activeSkin.color);
+              }
+          }, [activeSkin]);
 
           // === 1. 初始化 3D 引擎 ===
           useEffect(() => {
@@ -196,55 +213,118 @@
               sunLight.shadow.camera.bottom = -80;
               scene.add(sunLight);
 
+              // === 构建全新的“阿噗”模型 ===
               const playerGroup = new THREE.Group();
-              const skinMat = new THREE.MeshStandardMaterial({ color: 0xffb6c1, roughness: 0.3 }); 
-              const shirtMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.5 }); 
-              const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.7 }); 
-              const whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 }); 
+              const apuModel = new THREE.Group(); // 【核心修复】：整体包裹层
               
-              const cylinder = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 1.0, 24), skinMat);
-              cylinder.castShadow = true;
-              const topDome = new THREE.Mesh(new THREE.SphereGeometry(0.7, 24, 24, 0, Math.PI * 2, 0, Math.PI / 2), skinMat);
-              topDome.position.y = 0.5;
-              topDome.castShadow = true;
-              const bottomDome = new THREE.Mesh(new THREE.SphereGeometry(0.7, 24, 24, 0, Math.PI * 2, 0, Math.PI / 2), skinMat);
-              bottomDome.rotation.x = Math.PI;
-              bottomDome.position.y = -0.5;
-              bottomDome.castShadow = true;
+              const whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+              const mainColorMat = new THREE.MeshStandardMaterial({ color: SKINS[0].color, roughness: 0.5 });
+              const blackMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3 });
+              const blushMat = new THREE.MeshStandardMaterial({ color: 0xfca5a5, roughness: 0.6 });
 
-              const shirt = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.72, 0.6, 24), shirtMat);
-              shirt.position.y = 0.1;
-              const pants = new THREE.Mesh(new THREE.CylinderGeometry(0.71, 0.71, 0.4, 24), pantsMat);
-              pants.position.y = -0.4;
+              playerMaterialsRef.current = { mainColorMat };
 
-              const facePlateGeo = new THREE.SphereGeometry(0.55, 16, 16);
-              const facePlate = new THREE.Mesh(facePlateGeo, whiteMat);
-              facePlate.scale.set(1, 0.8, 0.3); 
-              facePlate.position.set(0, 0.2, 0.62); 
+              // 身体基础
+              const upperCyl = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.5, 32), whiteMat);
+              upperCyl.position.y = 0.25; upperCyl.castShadow = true;
+              const topDome = new THREE.Mesh(new THREE.SphereGeometry(0.85, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2), whiteMat);
+              topDome.position.y = 0.5; topDome.castShadow = true;
+              
+              const lowerCyl = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.6, 32), mainColorMat);
+              lowerCyl.position.y = -0.3; lowerCyl.castShadow = true;
+              const bottomDome = new THREE.Mesh(new THREE.SphereGeometry(0.85, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2), mainColorMat);
+              bottomDome.rotation.x = Math.PI; bottomDome.position.y = -0.6; bottomDome.castShadow = true;
+              
+              apuModel.add(upperCyl, topDome, lowerCyl, bottomDome);
 
-              const eyeMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
-              const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 12), eyeMat);
-              eyeL.position.set(0.2, 0.25, 0.75); 
-              const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 12), eyeMat);
-              eyeR.position.set(-0.2, 0.25, 0.75);
+              // 呆毛
+              const tuftGroup = new THREE.Group();
+              const tuft1 = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), mainColorMat);
+              tuft1.position.set(0.15, 0, 0);
+              const tuft2 = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), mainColorMat);
+              tuft2.position.set(-0.15, 0, 0);
+              const tuftBase = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.25, 16), mainColorMat);
+              tuftBase.rotation.x = Math.PI; tuftBase.position.set(0, -0.05, 0);
+              tuftGroup.add(tuft1, tuft2, tuftBase);
+              tuftGroup.position.set(0, 1.45, 0);
+              apuModel.add(tuftGroup);
 
-              const createLimb = (x, y, z, mat) => {
-                const group = new THREE.Group();
-                group.position.set(x, y, z);
-                const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.15, 0.6, 12), mat);
-                mesh.position.y = -0.3; 
-                mesh.castShadow = true;
-                group.add(mesh);
-                return group;
+              // 面部特征
+              const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 16), blackMat);
+              eyeL.position.set(0.35, 0.35, 0.81);
+              const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 16), blackMat);
+              eyeR.position.set(-0.35, 0.35, 0.81);
+              
+              const blushL = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 16), blushMat);
+              blushL.scale.set(1.2, 0.6, 0.2); blushL.position.set(0.55, 0.25, 0.78);
+              const blushR = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 16), blushMat);
+              blushR.scale.set(1.2, 0.6, 0.2); blushR.position.set(-0.55, 0.25, 0.78);
+
+              const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.03, 16, 32, Math.PI), blackMat);
+              mouth.rotation.x = Math.PI; mouth.position.set(0, 0.22, 0.84);
+
+              apuModel.add(eyeL, eyeR, blushL, blushR, mouth);
+
+              // 胸前 Logo
+              const logoBase = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.05, 32), whiteMat);
+              logoBase.rotation.x = Math.PI / 2;
+              const logoMark = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.15, 3), mainColorMat);
+              logoMark.rotation.x = Math.PI / 2; logoMark.position.z = 0.02;
+              const logoGroup = new THREE.Group();
+              logoGroup.add(logoBase, logoMark);
+              logoGroup.position.set(0.45, -0.2, 0.82);
+              logoGroup.rotation.y = Math.PI / 8;
+              logoGroup.rotation.z = -Math.PI / 16;
+              apuModel.add(logoGroup);
+
+              // 肢体生成
+              const createArm = (isLeft) => {
+                  const arm = new THREE.Group();
+                  const sign = isLeft ? 1 : -1;
+                  arm.position.set(sign * 0.95, 0, 0);
+
+                  const sleeve = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16, 0, Math.PI*2, 0, Math.PI/2), mainColorMat);
+                  sleeve.rotation.z = sign * Math.PI / 2;
+                  arm.add(sleeve);
+
+                  const hand = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.6, 16), whiteMat);
+                  hand.position.y = -0.4;
+                  const handDome = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), whiteMat);
+                  handDome.position.y = -0.7;
+                  arm.add(hand, handDome);
+                  
+                  return arm;
               };
+              const armL = createArm(true);
+              const armR = createArm(false);
 
-              const armL = createLimb(0.85, 0.1, 0, skinMat);
-              const armR = createLimb(-0.85, 0.1, 0, skinMat);
-              const legL = createLimb(0.3, -0.8, 0, pantsMat);
-              const legR = createLimb(-0.3, -0.8, 0, pantsMat);
+              const createLeg = (isLeft) => {
+                  const leg = new THREE.Group();
+                  const sign = isLeft ? 1 : -1;
+                  leg.position.set(sign * 0.4, -1.4, 0);
 
-              playerGroup.add(cylinder, topDome, bottomDome, shirt, pants, facePlate, eyeL, eyeR, armL, armR, legL, legR);
-              playerGroup.position.set(START_POS.x, START_POS.y, START_POS.z);
+                  const bone = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.5), whiteMat);
+                  bone.position.y = 0.25;
+                  leg.add(bone);
+
+                  const shoeBody = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, 0.65), mainColorMat);
+                  shoeBody.position.set(0, -0.1, 0.1);
+                  const shoeToe = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.5, 16), mainColorMat);
+                  shoeToe.rotation.z = Math.PI / 2; shoeToe.position.set(0, -0.1, 0.42);
+                  leg.add(shoeBody, shoeToe);
+
+                  return leg;
+              };
+              const legL = createLeg(true);
+              const legR = createLeg(false);
+
+              apuModel.add(armL, armR, legL, legR);
+              
+              // 【核心修复】整体抬高 0.75，使鞋底对齐 y = -1.0 的物理基础线
+              apuModel.position.set(0, 0.75, 0); 
+              
+              playerGroup.add(apuModel);
+              playerGroup.position.set(START_POS.x, START_POS.y, START_POS.z); // 使用基准的 START_POS.y (1.5)
               playerGroup.rotation.y = Math.PI;
 
               scene.add(playerGroup);
@@ -267,7 +347,6 @@
               let currC = Math.floor(GRID_COLS / 2);
               
               for (let r = 0; r < GRID_ROWS; r++) {
-                // 将正确道路的比例调整到大概占 15% (约 18 个安全块)
                 if (Math.random() < 0.1) {
                   // 10% 概率空出一行不断连
                 } else {
@@ -297,7 +376,6 @@
                 for (let c = 0; c < GRID_COLS; c++) {
                   const id = `hex-${r}-${c}`;
                   const isSafe = safeIds.has(id);
-                  // 陷阱概率整体降至 15%
                   const isTrap = Math.random() < 0.15; 
                   
                   const hexGroup = new THREE.Group();
@@ -322,17 +400,18 @@
               }
               hexesRef.current = hexes;
 
+              // 【核心修复】将起点和终点平齐对齐地面 (Y从-0.5改为0)
               const startZone = new THREE.Mesh(new THREE.BoxGeometry(100, 1, 80), new THREE.MeshStandardMaterial({ color: 0xa855f7 }));
-              startZone.position.set(0, -0.5, 48.5); 
+              startZone.position.set(0, 0, 48.5); 
               startZone.receiveShadow = true;
               scene.add(startZone);
 
               const triggerLine1 = new THREE.Mesh(new THREE.BoxGeometry(100, 1.1, 3), new THREE.MeshStandardMaterial({ color: 0xfacc15 }));
-              triggerLine1.position.set(0, -0.5, QUIZ1_TRIGGER_Z);
+              triggerLine1.position.set(0, 0, QUIZ1_TRIGGER_Z);
               scene.add(triggerLine1);
 
               const endZone1 = new THREE.Mesh(new THREE.BoxGeometry(100, 1, 90), new THREE.MeshStandardMaterial({ color: 0x22c55e }));
-              endZone1.position.set(0, -0.5, -335); 
+              endZone1.position.set(0, 0, -335); 
               endZone1.receiveShadow = true;
               scene.add(endZone1);
 
@@ -545,11 +624,11 @@
               };
 
               const triggerLine2 = new THREE.Mesh(new THREE.BoxGeometry(30, 1.1, 3), new THREE.MeshStandardMaterial({ color: 0xfacc15 }));
-              triggerLine2.position.set(0, -0.5, QUIZ2_TRIGGER_Z);
+              triggerLine2.position.set(0, 0, QUIZ2_TRIGGER_Z);
               scene.add(triggerLine2);
 
               const endZone2 = new THREE.Mesh(new THREE.BoxGeometry(100, 1, 80), new THREE.MeshStandardMaterial({ color: 0x10b981 }));
-              endZone2.position.set(0, -0.5, -745); 
+              endZone2.position.set(0, 0, -745); 
               endZone2.receiveShadow = true;
               scene.add(endZone2);
 
@@ -580,9 +659,11 @@
                 }
 
                 if (playerRef.current && playerRef.current.mesh) {
+                  // 将摄像机绑定到角色的视角朝向 (camYaw)
                   const playerCamYaw = playerRef.current.camYaw;
                   const camDist = 12; 
                   const camHeight = 7; 
+                  
                   const targetCamPos = new THREE.Vector3(
                     playerRef.current.mesh.position.x - Math.sin(playerCamYaw) * camDist, 
                     playerRef.current.mesh.position.y + camHeight, 
@@ -596,7 +677,9 @@
                     playerRef.current.mesh.position.z + Math.cos(playerCamYaw) * lookAhead
                   );
 
-                  if (!cameraRef.current.lookAtTarget) cameraRef.current.lookAtTarget = new THREE.Vector3().copy(targetLookAt);
+                  if (!cameraRef.current.lookAtTarget) {
+                      cameraRef.current.lookAtTarget = new THREE.Vector3().copy(targetLookAt);
+                  }
 
                   camera.position.lerp(targetCamPos, 0.1); 
                   cameraRef.current.lookAtTarget.lerp(targetLookAt, 0.1); 
@@ -673,7 +756,7 @@
           const handleJumpStart = () => { keysRef.current[' '] = true; };
           const handleJumpEnd = () => { keysRef.current[' '] = false; };
 
-          // 【核心修复：多层动态防穿模碰撞检测】
+          // 【多层动态防穿模碰撞检测算法】
           const checkObstacleCollision = (player, diskGroup, hitboxes, cx, cz, diskSpeed = 0) => {
               if (!hitboxes || hitboxes.length === 0) return false;
               
@@ -682,20 +765,22 @@
 
               if (player.mesh.position.y >= 2.8) return false; 
 
+              const PLAYER_RADIUS = 0.85; 
+
               for (let box of hitboxes) {
                   const dx = playerPosLocal.x - box.x;
                   const dz = playerPosLocal.z - box.z;
 
-                  let dynamicHalfX = box.halfX;
-                  let dynamicHalfZ = box.halfZ;
+                  let dynamicHalfX = box.halfX + PLAYER_RADIUS;
+                  let dynamicHalfZ = box.halfZ + PLAYER_RADIUS;
                   let sweepDist = 0;
 
                   if (box.align === 'X') {
-                      sweepDist = Math.abs(diskSpeed) * Math.abs(playerPosLocal.x);
-                      dynamicHalfZ += sweepDist + 0.4; 
+                      sweepDist = Math.abs(diskSpeed) * Math.abs(playerPosLocal.x) * 1.5;
+                      dynamicHalfZ += sweepDist; 
                   } else if (box.align === 'Z') {
-                      sweepDist = Math.abs(diskSpeed) * Math.abs(playerPosLocal.z);
-                      dynamicHalfX += sweepDist + 0.4;
+                      sweepDist = Math.abs(diskSpeed) * Math.abs(playerPosLocal.z) * 1.5;
+                      dynamicHalfX += sweepDist;
                   }
 
                   if (Math.abs(dx) < dynamicHalfX && Math.abs(dz) < dynamicHalfZ) {
@@ -703,15 +788,15 @@
                        
                        if (box.align === 'X') {
                            let pushSign = dz >= 0 ? 1 : -1;
-                           const sweepDir = -Math.sign(diskSpeed * playerPosLocal.x);
-                           if (sweepDir !== 0 && sweepDist > 0.05) pushSign = sweepDir;
+                           const cylVelZ = diskSpeed * playerPosLocal.x;
+                           if (Math.abs(cylVelZ) > 0.02) pushSign = Math.sign(cylVelZ);
                            
                            playerPosLocal.z = box.z + pushSign * (dynamicHalfZ + 0.05);
                            pushSignZ = pushSign;
                        } else if (box.align === 'Z') {
                            let pushSign = dx >= 0 ? 1 : -1;
-                           const sweepDir = Math.sign(diskSpeed * playerPosLocal.z);
-                           if (sweepDir !== 0 && sweepDist > 0.05) pushSign = sweepDir;
+                           const cylVelX = -diskSpeed * playerPosLocal.z;
+                           if (Math.abs(cylVelX) > 0.02) pushSign = Math.sign(cylVelX);
                            
                            playerPosLocal.x = box.x + pushSign * (dynamicHalfX + 0.05);
                            pushSignX = pushSign;
@@ -724,8 +809,8 @@
                        const pushLocal = new window.THREE.Vector3(pushSignX, 0, pushSignZ);
                        pushLocal.applyAxisAngle(new window.THREE.Vector3(0, 1, 0), diskGroup.rotation.y);
                        
-                       player.knockback.set(pushLocal.x * 0.8, 0, pushLocal.z * 0.8);
-                       if (player.vel.y <= 0) player.vel.y = 0.25;
+                       player.knockback.set(pushLocal.x * 1.2, 0, pushLocal.z * 1.2);
+                       if (player.vel.y <= 0) player.vel.y = 0.3;
                        return true;
                   }
               }
@@ -985,7 +1070,7 @@
                 const dist = Math.sqrt(dx*dx + dz*dz);
                 const newAngle = angle + currentTurnSpeed; 
                 player.mesh.position.x = turnCenterX + dist * Math.cos(newAngle);
-                player.mesh.position.z = turnCenterZ + dist * Math.sin(newAngle);
+                player.mesh.position.z = turnCenterZ + Math.sin(newAngle) * dist;
             }
 
             // === 关卡进度与安全区 ===
@@ -1018,12 +1103,13 @@
               player.vel.y = jumpForce; player.onGround = false;
             }
 
+            // 专属阿噗的动作微调
             if (isMoving && player.onGround) {
-              const animTime = Date.now() * 0.015;
-              player.limbs.armL.rotation.x = Math.sin(animTime) * 0.6; player.limbs.armR.rotation.x = -Math.sin(animTime) * 0.6;
+              const animTime = Date.now() * 0.018;
+              player.limbs.armL.rotation.x = Math.sin(animTime) * 0.5; player.limbs.armR.rotation.x = -Math.sin(animTime) * 0.5;
               player.limbs.legL.rotation.x = -Math.sin(animTime) * 0.6; player.limbs.legR.rotation.x = Math.sin(animTime) * 0.6;
             } else if (!player.onGround) {
-              player.limbs.armL.rotation.x = Math.PI / 4; player.limbs.armR.rotation.x = Math.PI / 4;
+              player.limbs.armL.rotation.x = Math.PI / 3; player.limbs.armR.rotation.x = Math.PI / 3; 
               player.limbs.legL.rotation.x = -Math.PI / 6; player.limbs.legR.rotation.x = 0;
             } else {
               player.limbs.armL.rotation.x = 0; player.limbs.armR.rotation.x = 0;
@@ -1065,7 +1151,7 @@
                 isCorrect = ans === 'C';
                 setQuizResult(isCorrect ? 'CORRECT' : 'WRONG');
                 if (isCorrect) {
-                    quiz1PassedRef.current = true; // 【新增】记忆通关状态
+                    quiz1PassedRef.current = true;
                     if (hexesRef.current.length > 0) {
                         hexesRef.current.forEach(hex => {
                             if (hex.isSafe) { hex.outerMat.color.setHex(0x34d399); hex.outerMat.emissive.setHex(0x34d399); hex.innerMat.emissive.setHex(0x34d399); hex.isGlowing = true; }
@@ -1076,7 +1162,7 @@
                 isCorrect = ans === 'A';
                 setQuizResult(isCorrect ? 'CORRECT' : 'WRONG');
                 if (isCorrect) {
-                    quiz2PassedRef.current = true; // 【新增】记忆通关状态
+                    quiz2PassedRef.current = true;
                     if (shortcutRef.current) {
                         shortcutRef.current.active = true;
                         shortcutRef.current.mainGroup.visible = true;
@@ -1098,7 +1184,6 @@
                 }
             }
             
-            // 【新增】触发大屏反馈动画，延迟1.2秒后再恢复游戏
             setQuizFeedback(isCorrect ? 'CORRECT' : 'WRONG');
             setTimeout(() => {
                 setQuizFeedback(null);
@@ -1124,7 +1209,6 @@
                 cameraRef.current.lookAtTarget = resetLookAt; cameraRef.current.lookAt(resetLookAt);
               }
               
-              // 【新增核心修复】如果掉落时没有答对对应关卡的题目，重置答题触发器，允许二次答题！
               if (!quiz1PassedRef.current) quiz1TriggeredRef.current = false;
               if (!quiz2PassedRef.current) quiz2TriggeredRef.current = false;
 
@@ -1150,7 +1234,7 @@
             let interval;
             if (gameState === 'START_COUNTDOWN') {
               if (countdown > 0) interval = setTimeout(() => setCountdown(c => c - 1), 1000); else setGameState('PLAYING');
-            } else if (gameState === 'QUIZ' && !quizFeedback) { // 【新增】在反馈动画期间暂停倒计时
+            } else if (gameState === 'QUIZ' && !quizFeedback) { 
               if (timer > 0) interval = setTimeout(() => setTimer(t => t - 1), 1000); else handleQuizAnswer('TIMEOUT');
             }
             return () => clearTimeout(interval);
@@ -1178,13 +1262,29 @@
                 {gameState === 'LOADING' && (
                   <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-sky-500 text-white">
                      <Loader2 className="w-20 h-20 animate-spin text-white mb-6 drop-shadow-md" />
-                     <p className="text-3xl font-black tracking-widest animate-pulse drop-shadow-md">构建关卡世界...</p>
+                     <p className="text-3xl font-black tracking-widest animate-pulse drop-shadow-md">构建阿噗的世界...</p>
                   </div>
                 )}
 
                 {gameState === 'READY' && (
                   <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-sky-900/40 backdrop-blur-sm p-8 text-center transition-opacity duration-500">
-                    <h1 className="text-6xl md:text-7xl font-black mb-16 italic tracking-tighter text-white drop-shadow-[0_8px_0_#0284c7]">阿噗向前冲!</h1>
+                    <h1 className="text-6xl md:text-7xl font-black mb-6 italic tracking-tighter text-white drop-shadow-[0_8px_0_#0284c7]">阿噗向前冲!</h1>
+                    
+                    <div className="bg-white/20 backdrop-blur-md p-6 rounded-3xl border-2 border-white/40 mb-10">
+                        <p className="text-white font-bold tracking-widest mb-4">选择你喜欢的阿噗造型</p>
+                        <div className="flex gap-4 justify-center">
+                            {SKINS.map(skin => (
+                                <button 
+                                    key={skin.id}
+                                    onClick={() => setActiveSkin(skin)}
+                                    className={`w-14 h-14 rounded-full border-4 transition-all duration-300 ${activeSkin.id === skin.id ? 'border-white scale-125 shadow-[0_0_15px_rgba(255,255,255,0.8)]' : 'border-white/40 hover:scale-110 opacity-80'}`}
+                                    style={{ backgroundColor: skin.hex }}
+                                    title={skin.name}
+                                />
+                            ))}
+                        </div>
+                    </div>
+
                     <button onClick={startGame} className="px-12 md:px-16 py-5 md:py-6 bg-pink-400 text-white font-black text-3xl md:text-4xl rounded-full hover:bg-pink-500 active:scale-95 shadow-[0_8px_0_#be185d] flex justify-center items-center gap-4 transition-all hover:scale-105">
                       <Play className="fill-current w-8 h-8 md:w-10 md:h-10" /> 开始游戏
                     </button>
@@ -1213,18 +1313,23 @@
                 {gameState === 'QUIZ' && (
                   <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-sky-900/60 backdrop-blur-md p-4 animate-in fade-in zoom-in duration-300">
                     
-                    {/* 【新增】即时反馈动效覆盖层 */}
                     {quizFeedback ? (
                         <div className="flex flex-col items-center animate-bounce">
                             {quizFeedback === 'CORRECT' ? (
                                 <>
                                     <CheckCircle className="text-green-400 w-24 h-24 mb-6 drop-shadow-lg" />
-                                    <span className="font-black text-green-400 text-5xl tracking-widest drop-shadow-lg">回答正确!</span>
+                                    <span className="font-black text-green-400 text-5xl tracking-widest drop-shadow-lg mb-4">回答正确!</span>
+                                    <span className="font-bold text-white text-2xl drop-shadow-md bg-green-500/40 px-6 py-2 rounded-full backdrop-blur-sm">
+                                        {quizType === 'QUIZ_1' ? '恭喜！朝着提示路线前进吧！' : '恭喜您，捷径大转盘为您升起。'}
+                                    </span>
                                 </>
                             ) : (
                                 <>
                                     <XCircle className="text-red-400 w-24 h-24 mb-6 drop-shadow-lg" />
-                                    <span className="font-black text-red-400 text-5xl tracking-widest drop-shadow-lg">回答错误!</span>
+                                    <span className="font-black text-red-400 text-5xl tracking-widest drop-shadow-lg mb-4">回答错误!</span>
+                                    <span className="font-bold text-white text-2xl drop-shadow-md bg-red-500/40 px-6 py-2 rounded-full backdrop-blur-sm">
+                                        {quizType === 'QUIZ_1' ? '很遗憾，您未能获得提示。' : '很遗憾，您未能解锁捷径。'}
+                                    </span>
                                 </>
                             )}
                         </div>
@@ -1235,9 +1340,13 @@
                                 {timer}s
                             </div>
                             <div className="bg-white border-8 border-pink-300 p-8 md:p-10 rounded-[2.5rem] shadow-2xl w-full max-w-xl">
-                              <div className="inline-block bg-pink-100 text-pink-600 px-4 py-1 rounded-full font-black uppercase tracking-widest text-sm mb-6">
+                              <div className="inline-block bg-pink-100 text-pink-600 px-4 py-1 rounded-full font-black uppercase tracking-widest text-sm mb-4">
                                  赛道问答 - 第 {currentStage} 关
                               </div>
+                              
+                              <p className="text-sky-600 font-black text-lg mb-6 border-l-4 border-sky-400 pl-3">
+                                  {quizType === 'QUIZ_1' ? '🎁 答对题目将获得正确路径提示' : '🎁 答对题目将获得通关捷径'}
+                              </p>
                               
                               {quizType === 'QUIZ_1' ? (
                                   <>
