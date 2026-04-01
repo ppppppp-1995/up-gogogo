@@ -13,7 +13,7 @@
 
     <style>
         body { 
-            margin: 0; padding: 0; background-color: #e0f2fe; overflow: hidden; font-family: sans-serif; 
+            margin: 0; padding: 0; background-color: #e0f2fe; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
             touch-action: none; 
             user-select: none;
             -webkit-user-select: none;
@@ -23,10 +23,33 @@
             #app-container { display: none !important; }
         }
         #portrait-lock { display: none; }
+        
+        /* 漫天飞舞的彩带动画 */
+        @keyframes confetti-fall {
+            0% { transform: translateY(-10vh) rotate(0deg) scale(1); opacity: 1; }
+            100% { transform: translateY(110vh) rotate(720deg) scale(1.2); opacity: 0; }
+        }
+
+        /* 撞击路障的碎屏震动特效 */
+        @keyframes crash-shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+        .crash-shake {
+            animation: crash-shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+        }
     </style>
 </head>
 <body>
-    <!-- 竖屏警告提示 -->
     <div id="portrait-lock" class="fixed inset-0 bg-sky-900 z-[9999] flex-col items-center justify-center text-white p-8 text-center">
         <svg class="w-28 h-28 mb-8 animate-[pulse_2s_infinite] text-sky-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" transform="rotate(90 12 12)" />
@@ -44,27 +67,13 @@
         const { useState, useEffect, useRef, useCallback } = React;
 
         // === 原生 SVG 组件 ===
-        const Trophy = ({ className, size = 24 }) => (
-            <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7c0 6 3 10 6 10s6-4 6-10V2z"/></svg>
-        );
-        const Timer = ({ className, size = 24 }) => (
-            <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="10" y1="2" x2="14" y2="2"/><line x1="12" y1="14" x2="15" y2="11"/><circle cx="12" cy="14" r="8"/></svg>
-        );
-        const ChevronRight = ({ className, size = 24 }) => (
-            <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-        );
-        const Loader2 = ({ className, size = 24 }) => (
-            <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-        );
-        const Play = ({ className, size = 24 }) => (
-            <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        );
-        const CheckCircle = ({ className, size = 24 }) => (
-            <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-        );
-        const XCircle = ({ className, size = 24 }) => (
-            <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-        );
+        const Trophy = ({ className, size = 24 }) => <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7c0 6 3 10 6 10s6-4 6-10V2z"/></svg>;
+        const Timer = ({ className, size = 24 }) => <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="10" y1="2" x2="14" y2="2"/><line x1="12" y1="14" x2="15" y2="11"/><circle cx="12" cy="14" r="8"/></svg>;
+        const ChevronRight = ({ className, size = 24 }) => <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>;
+        const Loader2 = ({ className, size = 24 }) => <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>;
+        const Play = ({ className, size = 24 }) => <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>;
+        const CheckCircle = ({ className, size = 24 }) => <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
+        const XCircle = ({ className, size = 24 }) => <svg className={className} width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>;
 
         // === 游戏全局配置 ===
         const GRID_ROWS = 20; 
@@ -72,47 +81,82 @@
         const HEX_RADIUS = 10; 
         const FALL_Y_THRESHOLD = -25; 
 
-        const START_POS = { x: 0, y: 1.5, z: 60 }; 
-        const QUIZ1_TRIGGER_Z = 35; 
-        const QUIZ2_TRIGGER_Z = -422; 
-        const STAGE2_WIN_Z = -700; 
+        const START_POS = { x: 0, y: 2.0, z: 50 }; 
+        const QUIZ1_TRIGGER_Z = 18; 
+        const QUIZ2_TRIGGER_Z = -380; 
+        const QUIZ3_TRIGGER_Z = -770; 
+        const STAGE3_WIN_Z = -3000; 
 
-        // 皮肤配置字典
+        // 皮肤配置
         const SKINS = [
-            { id: 'classic', name: '海盐蓝', color: 0x38bdf8, hex: '#38bdf8' },
+            { id: 'classic', name: '海盐蓝', color: 0x0ea5e9, hex: '#0ea5e9' },
             { id: 'sakura', name: '樱花粉', color: 0xf472b6, hex: '#f472b6' },
-            { id: 'golden', name: '炫闪金', color: 0xfbbf24, hex: '#fbbf24' },
-            { id: 'ninja', name: '暗影黑', color: 0x1e293b, hex: '#1e293b' }
+            { id: 'golden', name: '柠檬黄', color: 0xfacc15, hex: '#facc15' },
+            { id: 'ninja', name: '葡萄紫', color: 0xa855f7, hex: '#a855f7' }
         ];
 
-        // 绘制彩色扇形转盘
-        const createPieTexture = (color1, color2) => {
+        // === 图案与材质生成器 ===
+        const createPieTexture = (color1, color2, slices = 16) => {
             const canvas = document.createElement('canvas');
-            canvas.width = 256; canvas.height = 256;
+            canvas.width = 512; canvas.height = 512;
             const ctx = canvas.getContext('2d');
-            const cx = 128, cy = 128, r = 128;
-            for (let i = 0; i < 8; i++) {
+            const cx = 256, cy = 256, r = 256;
+            const sliceAngle = (Math.PI * 2) / slices;
+            for (let i = 0; i < slices; i++) {
                 ctx.beginPath();
                 ctx.moveTo(cx, cy);
-                ctx.arc(cx, cy, r, i * Math.PI / 4, (i + 1) * Math.PI / 4);
+                ctx.arc(cx, cy, r, i * sliceAngle, (i + 1) * sliceAngle);
                 ctx.fillStyle = i % 2 === 0 ? color1 : color2;
                 ctx.fill();
             }
-            return new THREE.CanvasTexture(canvas);
+            return new window.THREE.CanvasTexture(canvas);
+        };
+
+        const createPattern = (color1, color2, type) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            if (type === 'checker') {
+                ctx.fillStyle = color1; ctx.fillRect(0, 0, 512, 512);
+                ctx.fillStyle = color2;
+                ctx.fillRect(0, 0, 256, 256); ctx.fillRect(256, 256, 256, 256);
+            } else if (type === 'stripes') {
+                ctx.fillStyle = color1; ctx.fillRect(0, 0, 512, 512);
+                ctx.fillStyle = color2;
+                ctx.lineWidth = 64;
+                for(let i=-512; i<1024; i+=128) {
+                    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i+512, 512); ctx.stroke();
+                }
+            } else if (type === 'dots') {
+                ctx.fillStyle = color1; ctx.fillRect(0, 0, 512, 512);
+                ctx.fillStyle = color2;
+                for(let x=64; x<=512; x+=128) {
+                    for(let y=64; y<=512; y+=128) {
+                        ctx.beginPath(); ctx.arc(x, y, 32, 0, Math.PI*2); ctx.fill();
+                    }
+                }
+            }
+            const tex = new window.THREE.CanvasTexture(canvas);
+            tex.wrapS = window.THREE.RepeatWrapping; tex.wrapT = window.THREE.RepeatWrapping;
+            return tex;
         };
 
         const App = () => {
           const [gameState, setGameState] = useState('LOADING'); 
+          const [fallReason, setFallReason] = useState('FALL'); // 淘汰原因：FALL 或 ROADBLOCK
           const [quizType, setQuizType] = useState('QUIZ_1'); 
           const [quizResult, setQuizResult] = useState(null);
           const [quizFeedback, setQuizFeedback] = useState(null); 
           const [timer, setTimer] = useState(10);
           const [countdown, setCountdown] = useState(3);
           const [currentStage, setCurrentStage] = useState(1);
+          const [finalTime, setFinalTime] = useState(null); // 通关时间状态
           
-          // 皮肤选择状态
           const [activeSkin, setActiveSkin] = useState(SKINS[0]);
+          const [difficulty, setDifficulty] = useState('NORMAL');
+          
           const playerMaterialsRef = useRef(null);
+          const difficultyRef = useRef('NORMAL');
 
           const [joystickPos, setJoystickPos] = useState({ x: 0, y: 0 });
           const joystickBaseRef = useRef(null);
@@ -126,8 +170,10 @@
           
           const quiz1TriggeredRef = useRef(false); 
           const quiz2TriggeredRef = useRef(false); 
+          const quiz3TriggeredRef = useRef(false); 
           const quiz1PassedRef = useRef(false); 
           const quiz2PassedRef = useRef(false); 
+          const quiz3PassedRef = useRef(false); 
 
           const checkpointRef = useRef({ x: START_POS.x, y: START_POS.y, z: START_POS.z });
           
@@ -140,21 +186,106 @@
           const shortcutRef = useRef(null); 
           const pendulumsRef = useRef([]); 
           const ballsRef = useRef([]); 
+          const sceneryRef = useRef([]); 
+          const slideObjectsRef = useRef(null); 
           const lastFireTimeRef = useRef(0); 
           const keysRef = useRef({});
           const requestRef = useRef();
           const resizeObserverRef = useRef(null);
+          const startTimeRef = useRef(0); // 游戏开始时间基准
 
           useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
           useEffect(() => { currentStageRef.current = currentStage; }, [currentStage]);
           useEffect(() => { quizResultRef.current = quizResult; }, [quizResult]);
 
-          // 实时换肤逻辑
           useEffect(() => {
               if (playerMaterialsRef.current && playerMaterialsRef.current.mainColorMat) {
                   playerMaterialsRef.current.mainColorMat.color.setHex(activeSkin.color);
               }
           }, [activeSkin]);
+
+          const applyDifficultyToHexes = useCallback((diff, hexesArray) => {
+              let targetSafePct = 0.25;
+              let targetTrapPct = 0.0;
+
+              if (diff === 'EASY') { 
+                  targetSafePct = 0.25; targetTrapPct = 0.0; 
+              } else if (diff === 'NORMAL') { 
+                  targetSafePct = 0.20; targetTrapPct = 0.10; 
+              } else if (diff === 'HELL') { 
+                  targetSafePct = 0.18; targetTrapPct = 0.20; 
+              }
+
+              const totalHexes = GRID_ROWS * GRID_COLS; 
+              const targetSafeCount = Math.round(totalHexes * targetSafePct); 
+              const targetTrapCount = Math.round(totalHexes * targetTrapPct);
+
+              const safeSet = new Set();
+              let currC = Math.floor(GRID_COLS / 2);
+              
+              for (let r = 0; r < GRID_ROWS; r++) {
+                  safeSet.add(`hex-${r}-${currC}`);
+                  if (Math.random() < 0.4) {
+                      currC += Math.random() < 0.5 ? 1 : -1;
+                      currC = Math.max(0, Math.min(GRID_COLS - 1, currC));
+                  }
+              }
+
+              if (diff === 'HELL') {
+                  const gapRow = Math.floor(Math.random() * 10) + 5; 
+                  const hexToRemove = Array.from(safeSet).find(id => id.startsWith(`hex-${gapRow}-`));
+                  if (hexToRemove) safeSet.delete(hexToRemove);
+              }
+
+              const allIds = hexesArray.map(h => h.id);
+              while (safeSet.size < targetSafeCount) {
+                  const existing = Array.from(safeSet);
+                  const baseId = existing[Math.floor(Math.random() * existing.length)];
+                  const parts = baseId.split('-');
+                  const r = parseInt(parts[1]), c = parseInt(parts[2]);
+                  
+                  const neighbors = [
+                      `hex-${r}-${c-1}`, `hex-${r}-${c+1}`,
+                      `hex-${r-1}-${c}`, `hex-${r+1}-${c}`
+                  ];
+                  const validNeighbors = neighbors.filter(id => {
+                      const p = id.split('-');
+                      if (p.length !== 3) return false;
+                      const nr = parseInt(p[1]), nc = parseInt(p[2]);
+                      return nr >= 0 && nr < GRID_ROWS && nc >= 0 && nc < GRID_COLS && !safeSet.has(id);
+                  });
+                  
+                  if (validNeighbors.length > 0) {
+                      safeSet.add(validNeighbors[Math.floor(Math.random() * validNeighbors.length)]);
+                  } else {
+                      safeSet.add(allIds[Math.floor(Math.random() * allIds.length)]);
+                  }
+              }
+
+              const trapSet = new Set();
+              while (trapSet.size < targetTrapCount) {
+                  trapSet.add(allIds[Math.floor(Math.random() * allIds.length)]);
+              }
+
+              hexesArray.forEach(hex => {
+                  hex.isSafe = safeSet.has(hex.id);
+                  hex.isTrap = trapSet.has(hex.id);
+                  hex.isGlowing = false;
+                  
+                  if (hex.outerMat && hex.innerMat) {
+                      hex.outerMat.color.setHex(0xffffff); 
+                      hex.outerMat.emissive.setHex(0x000000); 
+                      hex.outerMat.emissiveIntensity = 0;
+                      hex.innerMat.emissive.setHex(0x000000); 
+                      hex.innerMat.emissiveIntensity = 0;
+                  }
+              });
+          }, []);
+
+          const handleDifficultyChange = (diff) => {
+              setDifficulty(diff); difficultyRef.current = diff;
+              if (hexesRef.current && hexesRef.current.length > 0) applyDifficultyToHexes(diff, hexesRef.current);
+          };
 
           // === 1. 初始化 3D 引擎 ===
           useEffect(() => {
@@ -165,14 +296,25 @@
               if (!THREE || !mountRef.current || !isMounted) return;
 
               const scene = new THREE.Scene();
-              scene.background = new THREE.Color(0x38bdf8); 
-              scene.fog = new THREE.Fog(0x38bdf8, 50, 200);
+              
+              const skyCanvas = document.createElement('canvas');
+              skyCanvas.width = 2; skyCanvas.height = 512;
+              const sCtx = skyCanvas.getContext('2d');
+              const skyGrad = sCtx.createLinearGradient(0, 0, 0, 512);
+              skyGrad.addColorStop(0, '#38bdf8');   
+              skyGrad.addColorStop(0.3, '#c084fc'); 
+              skyGrad.addColorStop(0.7, '#f472b6'); 
+              skyGrad.addColorStop(1, '#fde047');   
+              sCtx.fillStyle = skyGrad; sCtx.fillRect(0,0,2,512);
+              scene.background = new THREE.CanvasTexture(skyCanvas);
+              
+              scene.fog = new THREE.FogExp2(0xfbcfe8, 0.002);
               sceneRef.current = scene;
 
               let width = mountRef.current.clientWidth || window.innerWidth;
               let height = mountRef.current.clientHeight || window.innerHeight;
 
-              const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000); 
+              const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 2000); 
               camera.position.set(0, 10, 70); 
               cameraRef.current = camera;
 
@@ -181,285 +323,266 @@
               renderer.shadowMap.enabled = true;
               renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
               renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-              rendererRef.current = renderer;
               mountRef.current.appendChild(renderer.domElement);
+              rendererRef.current = renderer;
 
               if (window.ResizeObserver) {
                 resizeObserverRef.current = new ResizeObserver(entries => {
                   for (let entry of entries) {
                     if (!mountRef.current || !rendererRef.current || !cameraRef.current) return;
-                    const w = entry.contentRect.width;
-                    const h = entry.contentRect.height;
+                    const w = entry.contentRect.width; const h = entry.contentRect.height;
                     if (w > 0 && h > 0) {
-                      rendererRef.current.setSize(w, h);
-                      cameraRef.current.aspect = w / h;
-                      cameraRef.current.updateProjectionMatrix();
+                      rendererRef.current.setSize(w, h); cameraRef.current.aspect = w / h; cameraRef.current.updateProjectionMatrix();
                     }
                   }
                 });
                 resizeObserverRef.current.observe(mountRef.current);
               }
 
-              const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+              const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
               scene.add(ambientLight);
-              const sunLight = new THREE.DirectionalLight(0xfffaeb, 0.9);
-              sunLight.position.set(40, 70, 50);
-              sunLight.castShadow = true;
-              sunLight.shadow.mapSize.width = 1024;
-              sunLight.shadow.mapSize.height = 1024;
-              sunLight.shadow.camera.left = -80;
-              sunLight.shadow.camera.right = 80;
-              sunLight.shadow.camera.top = 80;
-              sunLight.shadow.camera.bottom = -80;
+              const sunLight = new THREE.DirectionalLight(0xfffaeb, 0.7);
+              sunLight.position.set(40, 80, 60); sunLight.castShadow = true;
+              sunLight.shadow.mapSize.width = 2048; sunLight.shadow.mapSize.height = 2048;
+              sunLight.shadow.camera.left = -120; sunLight.shadow.camera.right = 120;
+              sunLight.shadow.camera.top = 120; sunLight.shadow.camera.bottom = -120;
               scene.add(sunLight);
+              const fillLight = new THREE.DirectionalLight(0xfbcfe8, 0.4); 
+              fillLight.position.set(-40, 30, -50);
+              scene.add(fillLight);
 
-              // === 构建全新的“阿噗”模型 ===
+              const groundCanvas = document.createElement('canvas');
+              groundCanvas.width = 512; groundCanvas.height = 512;
+              const gCtx = groundCanvas.getContext('2d');
+              const gGrad = gCtx.createRadialGradient(256, 256, 0, 256, 256, 256);
+              gGrad.addColorStop(0, '#fdf4ff'); gGrad.addColorStop(1, '#fbcfe8');
+              gCtx.fillStyle = gGrad; gCtx.fillRect(0,0,512,512);
+              const groundTex = new THREE.CanvasTexture(groundCanvas);
+              groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping; groundTex.repeat.set(50, 50);
+              const groundMat = new THREE.MeshStandardMaterial({ map: groundTex, roughness: 0.8, opacity: 0.9, transparent: true });
+              const ground = new THREE.Mesh(new THREE.PlaneGeometry(8000, 8000), groundMat);
+              ground.rotation.x = -Math.PI/2; 
+              ground.position.y = -250; 
+              ground.receiveShadow = true;
+              scene.add(ground);
+
+              // === 构建阿噗模型 ===
               const playerGroup = new THREE.Group();
-              const apuModel = new THREE.Group(); // 【核心修复】：整体包裹层
+              const apuModel = new THREE.Group(); 
+              const bodyGroup = new THREE.Group(); 
               
-              const whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
-              const mainColorMat = new THREE.MeshStandardMaterial({ color: SKINS[0].color, roughness: 0.5 });
-              const blackMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3 });
+              const whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.1 });
+              const mainColorMat = new THREE.MeshStandardMaterial({ color: SKINS[0].color, roughness: 0.4, metalness: 0.1 });
+              const blackMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.2 });
               const blushMat = new THREE.MeshStandardMaterial({ color: 0xfca5a5, roughness: 0.6 });
-
               playerMaterialsRef.current = { mainColorMat };
 
-              // 身体基础
               const upperCyl = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.5, 32), whiteMat);
               upperCyl.position.y = 0.25; upperCyl.castShadow = true;
               const topDome = new THREE.Mesh(new THREE.SphereGeometry(0.85, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2), whiteMat);
               topDome.position.y = 0.5; topDome.castShadow = true;
-              
               const lowerCyl = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.6, 32), mainColorMat);
               lowerCyl.position.y = -0.3; lowerCyl.castShadow = true;
               const bottomDome = new THREE.Mesh(new THREE.SphereGeometry(0.85, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2), mainColorMat);
               bottomDome.rotation.x = Math.PI; bottomDome.position.y = -0.6; bottomDome.castShadow = true;
-              
-              apuModel.add(upperCyl, topDome, lowerCyl, bottomDome);
+              bodyGroup.add(upperCyl, topDome, lowerCyl, bottomDome);
 
-              // 呆毛
               const tuftGroup = new THREE.Group();
-              const tuft1 = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), mainColorMat);
-              tuft1.position.set(0.15, 0, 0);
-              const tuft2 = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), mainColorMat);
-              tuft2.position.set(-0.15, 0, 0);
-              const tuftBase = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.25, 16), mainColorMat);
-              tuftBase.rotation.x = Math.PI; tuftBase.position.set(0, -0.05, 0);
-              tuftGroup.add(tuft1, tuft2, tuftBase);
-              tuftGroup.position.set(0, 1.45, 0);
-              apuModel.add(tuftGroup);
+              const tuft1 = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), mainColorMat); tuft1.position.set(0.15, 0, 0);
+              const tuft2 = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), mainColorMat); tuft2.position.set(-0.15, 0, 0);
+              const tuftBase = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.25, 16), mainColorMat); tuftBase.rotation.x = Math.PI; tuftBase.position.set(0, -0.05, 0);
+              tuftGroup.add(tuft1, tuft2, tuftBase); tuftGroup.position.set(0, 1.45, 0);
+              bodyGroup.add(tuftGroup);
 
-              // 面部特征
-              const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 16), blackMat);
-              eyeL.position.set(0.35, 0.35, 0.81);
-              const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 16), blackMat);
-              eyeR.position.set(-0.35, 0.35, 0.81);
+              const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 16), blackMat); 
+              eyeL.scale.set(1, 1.5, 0.1); eyeL.position.set(0.32, 0.35, 0.83);
+              const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 16), blackMat); 
+              eyeR.scale.set(1, 1.5, 0.1); eyeR.position.set(-0.32, 0.35, 0.83);
               
-              const blushL = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 16), blushMat);
-              blushL.scale.set(1.2, 0.6, 0.2); blushL.position.set(0.55, 0.25, 0.78);
-              const blushR = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 16), blushMat);
-              blushR.scale.set(1.2, 0.6, 0.2); blushR.position.set(-0.55, 0.25, 0.78);
+              const blushL = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 16), blushMat); 
+              blushL.scale.set(1.2, 0.6, 0.1); blushL.position.set(0.52, 0.22, 0.77);
+              const blushR = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 16), blushMat); 
+              blushR.scale.set(1.2, 0.6, 0.1); blushR.position.set(-0.52, 0.22, 0.77);
+              
+              const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.03, 16, 32, Math.PI), blackMat); 
+              mouth.scale.set(1, 1, 0.1); mouth.rotation.x = Math.PI; mouth.position.set(0, 0.22, 0.84);
+              bodyGroup.add(eyeL, eyeR, blushL, blushR, mouth);
 
-              const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.03, 16, 32, Math.PI), blackMat);
-              mouth.rotation.x = Math.PI; mouth.position.set(0, 0.22, 0.84);
+              const logoBase = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.05, 32), whiteMat); logoBase.rotation.x = Math.PI / 2;
+              const logoMark = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.15, 3), mainColorMat); logoMark.rotation.x = Math.PI / 2; logoMark.position.z = 0.02;
+              const logoGroup = new THREE.Group(); logoGroup.add(logoBase, logoMark); 
+              logoGroup.scale.set(1, 1, 0.2); logoGroup.position.set(0.4, -0.2, 0.82); logoGroup.rotation.y = Math.PI / 8; logoGroup.rotation.z = -Math.PI / 16;
+              bodyGroup.add(logoGroup);
 
-              apuModel.add(eyeL, eyeR, blushL, blushR, mouth);
-
-              // 胸前 Logo
-              const logoBase = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.05, 32), whiteMat);
-              logoBase.rotation.x = Math.PI / 2;
-              const logoMark = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.15, 3), mainColorMat);
-              logoMark.rotation.x = Math.PI / 2; logoMark.position.z = 0.02;
-              const logoGroup = new THREE.Group();
-              logoGroup.add(logoBase, logoMark);
-              logoGroup.position.set(0.45, -0.2, 0.82);
-              logoGroup.rotation.y = Math.PI / 8;
-              logoGroup.rotation.z = -Math.PI / 16;
-              apuModel.add(logoGroup);
-
-              // 肢体生成
               const createArm = (isLeft) => {
-                  const arm = new THREE.Group();
-                  const sign = isLeft ? 1 : -1;
-                  arm.position.set(sign * 0.95, 0, 0);
-
-                  const sleeve = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16, 0, Math.PI*2, 0, Math.PI/2), mainColorMat);
-                  sleeve.rotation.z = sign * Math.PI / 2;
-                  arm.add(sleeve);
-
-                  const hand = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.6, 16), whiteMat);
-                  hand.position.y = -0.4;
-                  const handDome = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), whiteMat);
-                  handDome.position.y = -0.7;
-                  arm.add(hand, handDome);
-                  
+                  const arm = new THREE.Group(); const sign = isLeft ? 1 : -1; arm.position.set(sign * 0.9, 0, 0);
+                  const sleeve = new THREE.Mesh(new THREE.SphereGeometry(0.3, 24, 24), mainColorMat); 
+                  sleeve.scale.set(1, 0.8, 1); sleeve.rotation.z = sign * Math.PI / 5; 
+                  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.22, 24, 24), whiteMat); 
+                  hand.scale.set(1, 1.8, 1); hand.position.y = -0.35; hand.castShadow = true; 
+                  arm.add(sleeve, hand);
                   return arm;
               };
-              const armL = createArm(true);
-              const armR = createArm(false);
 
               const createLeg = (isLeft) => {
-                  const leg = new THREE.Group();
-                  const sign = isLeft ? 1 : -1;
-                  leg.position.set(sign * 0.4, -1.4, 0);
-
-                  const bone = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.5), whiteMat);
-                  bone.position.y = 0.25;
-                  leg.add(bone);
-
-                  const shoeBody = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, 0.65), mainColorMat);
-                  shoeBody.position.set(0, -0.1, 0.1);
-                  const shoeToe = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.5, 16), mainColorMat);
-                  shoeToe.rotation.z = Math.PI / 2; shoeToe.position.set(0, -0.1, 0.42);
-                  leg.add(shoeBody, shoeToe);
-
+                  const leg = new THREE.Group(); 
+                  const sign = isLeft ? 1 : -1; 
+                  leg.position.set(sign * 0.35, -1.4, 0); 
+                  const bone = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.5, 16), whiteMat); 
+                  bone.position.y = 0.25; 
+                  const shoeBody = new THREE.Mesh(new THREE.SphereGeometry(0.24, 32, 32), mainColorMat); 
+                  shoeBody.scale.set(1.2, 0.8, 1.4); 
+                  shoeBody.position.set(0, -0.1, 0.1); 
+                  shoeBody.castShadow = true;
+                  const shoeCuff = new THREE.Mesh(new THREE.SphereGeometry(0.22, 32, 32), mainColorMat);
+                  shoeCuff.scale.set(1.3, 0.6, 1.3); 
+                  shoeCuff.position.set(0, 0.05, 0.02);
+                  shoeCuff.castShadow = true;
+                  leg.add(bone, shoeBody, shoeCuff);
                   return leg;
               };
-              const legL = createLeg(true);
-              const legR = createLeg(false);
 
-              apuModel.add(armL, armR, legL, legR);
+              const armL = createArm(true); const armR = createArm(false); const legL = createLeg(true); const legR = createLeg(false);
               
-              // 【核心修复】整体抬高 0.75，使鞋底对齐 y = -1.0 的物理基础线
+              bodyGroup.add(armL, armR);
+              apuModel.add(bodyGroup, legL, legR);
               apuModel.position.set(0, 0.75, 0); 
               
-              playerGroup.add(apuModel);
-              playerGroup.position.set(START_POS.x, START_POS.y, START_POS.z); // 使用基准的 START_POS.y (1.5)
-              playerGroup.rotation.y = Math.PI;
+              const shieldBubble = new THREE.Mesh(
+                  new THREE.SphereGeometry(1.6, 32, 32), 
+                  new THREE.MeshStandardMaterial({ color: 0xfacc15, transparent: true, opacity: 0.4, emissive: 0xfacc15, emissiveIntensity: 0.8, side: THREE.DoubleSide })
+              );
+              shieldBubble.position.set(0, 0.8, 0);
+              shieldBubble.visible = false; 
+              apuModel.add(shieldBubble);
 
+              playerGroup.add(apuModel);
+              playerGroup.position.set(START_POS.x, START_POS.y, START_POS.z); 
+              playerGroup.rotation.y = Math.PI;
               scene.add(playerGroup);
+              
               playerRef.current = { 
-                mesh: playerGroup, 
-                vel: new THREE.Vector3(), 
-                knockback: new THREE.Vector3(), 
-                onGround: false, 
-                wasOnGround: true, 
-                jumpCooldownUntil: 0, 
-                limbs: { armL, armR, legL, legR },
-                targetRotationY: Math.PI,
-                camYaw: Math.PI,
-                backwardRunTime: 0,
-                onTurntable: false 
+                mesh: playerGroup, vel: new THREE.Vector3(), knockback: new THREE.Vector3(), 
+                onGround: false, wasOnGround: true, jumpCooldownUntil: 0, 
+                limbs: { armL, armR, legL, legR, bodyGroup, apuModel }, 
+                targetRotationY: Math.PI, camYaw: Math.PI, 
+                backwardRunTime: 0, isQuickTurning: false, inputLockedCamYaw: null, onTurntable: false,
+                hasShield: false, shieldBubble: shieldBubble, boostUntil: 0, isSpinning: false, spinTime: 0,
+                isLocked: false, isFlung: false, blockedUntil: 0, 
+                hasFinishedSlide: false 
               };
 
-              // === 第一关 ===
-              const safeIds = new Set();
-              let currC = Math.floor(GRID_COLS / 2);
-              
-              for (let r = 0; r < GRID_ROWS; r++) {
-                if (Math.random() < 0.1) {
-                  // 10% 概率空出一行不断连
-                } else {
-                  safeIds.add(`hex-${r}-${currC}`);
-                  if (Math.random() < 0.4) {
-                    const dir = Math.random() < 0.5 ? 1 : -1;
-                    const nextC = currC + dir;
-                    if (nextC >= 0 && nextC < GRID_COLS) currC = nextC;
-                  }
-                }
-              }
-
+              // === 生成六边形迷阵 ===
               const hexes = [];
-              const outerHexGeo = new THREE.CylinderGeometry(HEX_RADIUS, HEX_RADIUS, 1.0, 6);
-              const innerHexGeo = new THREE.CylinderGeometry(HEX_RADIUS * 0.93, HEX_RADIUS * 0.93, 1.05, 6); 
+              const outerHexGeo = new THREE.CylinderGeometry(HEX_RADIUS, HEX_RADIUS, 1.2, 6); 
+              const innerHexGeo = new THREE.CylinderGeometry(HEX_RADIUS * 0.90, HEX_RADIUS * 0.90, 1.25, 6); 
               
-              const hexCanvas = document.createElement('canvas');
-              hexCanvas.width = 128; hexCanvas.height = 128;
+              const hexCanvas = document.createElement('canvas'); hexCanvas.width = 128; hexCanvas.height = 128;
               const hCtx = hexCanvas.getContext('2d');
-              const hGrad = hCtx.createLinearGradient(0, 0, 128, 128);
-              hGrad.addColorStop(0, '#fbcfe8'); hGrad.addColorStop(1, '#be185d'); 
+              const hGrad = hCtx.createRadialGradient(64,64,10, 64,64,64);
+              hGrad.addColorStop(0, '#67e8f9'); 
+              hGrad.addColorStop(1, '#06b6d4'); 
               hCtx.fillStyle = hGrad; hCtx.fillRect(0, 0, 128, 128);
-              const hexTexture = new THREE.CanvasTexture(hexCanvas);
-              const innerMat = new THREE.MeshStandardMaterial({ map: hexTexture, roughness: 0.6 }); 
+              const innerMat = new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(hexCanvas), roughness: 0.3, metalness: 0.1 }); 
 
               for (let r = 0; r < GRID_ROWS; r++) {
                 for (let c = 0; c < GRID_COLS; c++) {
                   const id = `hex-${r}-${c}`;
-                  const isSafe = safeIds.has(id);
-                  const isTrap = Math.random() < 0.15; 
-                  
                   const hexGroup = new THREE.Group();
-                  const outerMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
-                  const outerHex = new THREE.Mesh(outerHexGeo, outerMat);
-                  outerHex.receiveShadow = true; outerHex.castShadow = true;
-
+                  const outerMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1, metalness: 0.1 }); 
+                  const outerHex = new THREE.Mesh(outerHexGeo, outerMat); outerHex.receiveShadow = true; outerHex.castShadow = true;
                   const uniqueInnerMat = innerMat.clone();
-                  const innerHex = new THREE.Mesh(innerHexGeo, uniqueInnerMat);
-                  innerHex.receiveShadow = true;
-                  
+                  const innerHex = new THREE.Mesh(innerHexGeo, uniqueInnerMat); innerHex.receiveShadow = true;
                   hexGroup.add(outerHex); hexGroup.add(innerHex);
 
                   const xOffset = (r % 2 === 0) ? 0 : (Math.sqrt(3) * HEX_RADIUS) / 2;
                   const x = (c - (GRID_COLS-1)/2) * (Math.sqrt(3) * HEX_RADIUS) + xOffset;
                   const z = 0 - r * (1.5 * HEX_RADIUS); 
-                  
-                  hexGroup.position.set(x, 0, z);
-                  scene.add(hexGroup);
-                  hexes.push({ mesh: hexGroup, outerMat, innerMat: uniqueInnerMat, id, isSafe, isTrap, isGlowing: false, status: 'STABLE', shakeTime: 0, origX: x });
+                  hexGroup.position.set(x, 0, z); scene.add(hexGroup);
+                  hexes.push({ mesh: hexGroup, outerMat, innerMat: uniqueInnerMat, id, isSafe: false, isTrap: false, isGlowing: false, status: 'STABLE', shakeTime: 0, origX: x });
                 }
               }
               hexesRef.current = hexes;
+              applyDifficultyToHexes(difficultyRef.current, hexesRef.current);
 
-              // 【核心修复】将起点和终点平齐对齐地面 (Y从-0.5改为0)
-              const startZone = new THREE.Mesh(new THREE.BoxGeometry(100, 1, 80), new THREE.MeshStandardMaterial({ color: 0xa855f7 }));
-              startZone.position.set(0, 0, 48.5); 
-              startZone.receiveShadow = true;
-              scene.add(startZone);
+              // === 生成带承重柱的彩绘平台 ===
+              const createPlatform = (w, d, z, patternType, color1, color2, yOffset = 0) => {
+                  const group = new THREE.Group();
+                  const base = new THREE.Mesh(new THREE.BoxGeometry(w + 2, 1.5, d + 0.1), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 }));
+                  base.position.y = -0.25; base.receiveShadow = true; base.castShadow = true;
+                  const tex = createPattern(color1, color2, patternType);
+                  tex.repeat.set(w/10, d/10);
+                  const top = new THREE.Mesh(new THREE.BoxGeometry(w, 1.2, d), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.4 }));
+                  top.position.y = 0 + yOffset; 
+                  top.receiveShadow = true;
 
-              const triggerLine1 = new THREE.Mesh(new THREE.BoxGeometry(100, 1.1, 3), new THREE.MeshStandardMaterial({ color: 0xfacc15 }));
-              triggerLine1.position.set(0, 0, QUIZ1_TRIGGER_Z);
-              scene.add(triggerLine1);
+                  const pillarW = Math.max(w * 0.8, 10);
+                  const pillarD = Math.max(d * 0.8, 5);
+                  const pillar = new THREE.Mesh(
+                      new THREE.BoxGeometry(pillarW, 300, pillarD),
+                      new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.8 })
+                  );
+                  pillar.position.y = -150; 
 
-              const endZone1 = new THREE.Mesh(new THREE.BoxGeometry(100, 1, 90), new THREE.MeshStandardMaterial({ color: 0x22c55e }));
-              endZone1.position.set(0, 0, -335); 
-              endZone1.receiveShadow = true;
-              scene.add(endZone1);
+                  group.add(base, top, pillar);
+                  group.position.set(0, 0, z);
+                  scene.add(group);
+                  return group;
+              };
 
+              createPlatform(100, 40, 40, 'checker', '#c084fc', '#a855f7');        
+              createPlatform(100, 10, 15, 'stripes', '#fde047', '#eab308', 0.02); 
+              createPlatform(100, 90, -340, 'dots', '#86efac', '#22c55e');         
+              createPlatform(100, 10, -390, 'stripes', '#fde047', '#eab308', 0.02); 
+              createPlatform(100, 80, -745, 'checker', '#f472b6', '#ec4899');      
+              createPlatform(100, 10, -765, 'stripes', '#fde047', '#eab308', 0.02); 
+              
+              // 终点大平台，位置和尺寸完美匹配抛物线落点，面积扩大4倍防漏接
+              createPlatform(300, 1200, -3200, 'dots', '#4ade80', '#22c55e');   
+              const finalArchGeo = new THREE.TorusGeometry(40, 4, 16, 64, Math.PI);
+              const finalArch = new THREE.Mesh(finalArchGeo, new THREE.MeshStandardMaterial({color:0xfacc15, emissive: 0xfacc15, emissiveIntensity:0.8}));
+              finalArch.position.set(0, 1.5, -3100); 
+              scene.add(finalArch);
 
-              // === 构建第二关：极其疯狂的高速旋转圆盘与滚木 ===
+              // === 构建第二关：机械游乐园转盘与糖果棒陷阱 ===
               const turntables = [];
-              const tex1 = createPieTexture('#3b82f6', '#1d4ed8'); 
-              const tex2 = createPieTexture('#8b5cf6', '#4338ca'); 
-              const tex3 = createPieTexture('#ec4899', '#be185d'); 
+              const tex1 = createPieTexture('#38bdf8', '#bae6fd', 16); 
+              const tex2 = createPieTexture('#a855f7', '#d8b4fe', 16); 
+              const tex3 = createPieTexture('#ec4899', '#fbcfe8', 16); 
               const mats = [
-                  new THREE.MeshStandardMaterial({ map: tex1, roughness: 0.5 }),
-                  new THREE.MeshStandardMaterial({ map: tex2, roughness: 0.5 }),
-                  new THREE.MeshStandardMaterial({ map: tex3, roughness: 0.5 })
+                  new THREE.MeshStandardMaterial({ map: tex1, roughness: 0.3, metalness: 0.1 }),
+                  new THREE.MeshStandardMaterial({ map: tex2, roughness: 0.3, metalness: 0.1 }),
+                  new THREE.MeshStandardMaterial({ map: tex3, roughness: 0.3, metalness: 0.1 })
               ];
+              const candyTex = createPattern('#fef08a', '#000000', 'stripes'); 
+              candyTex.repeat.set(1, 4);
+              const candyMat = new THREE.MeshStandardMaterial({ map: candyTex, roughness: 0.5 });
 
               const addStandardObstacle = (group, radius) => {
                   if (Math.random() < 0.6) { 
-                      const obsGeo = new THREE.CylinderGeometry(0.8, 0.8, radius * 1.8, 16);
-                      const obsMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.6 });
-                      const obsMesh = new THREE.Mesh(obsGeo, obsMat);
-                      obsMesh.rotation.z = Math.PI / 2; 
-                      obsMesh.position.y = 1.0; 
-                      obsMesh.castShadow = true;
+                      const obsGeo = new THREE.CylinderGeometry(0.9, 0.9, radius * 1.8, 24);
+                      const obsMesh = new THREE.Mesh(obsGeo, candyMat);
+                      obsMesh.rotation.z = Math.PI / 2; obsMesh.position.y = 1.2; obsMesh.castShadow = true;
                       group.add(obsMesh);
-                      return [{ x: 0, z: 0, halfX: radius * 0.9, halfZ: 0.8, align: 'X' }];
+                      return [{ x: 0, z: 0, halfX: radius * 0.9, halfZ: 0.9, align: 'X' }];
                   }
                   return [];
               };
 
               const addCrossObstacles = (group, radius) => {
-                  const obsMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.6 });
-                  const obs1 = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, radius * 1.8, 16), obsMat);
-                  obs1.rotation.z = Math.PI / 2; obs1.position.y = 1.0; obs1.castShadow = true; group.add(obs1);
-                  
-                  const obs2 = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, radius * 1.8, 16), obsMat);
-                  obs2.rotation.x = Math.PI / 2; obs2.position.y = 1.0; obs2.castShadow = true; group.add(obs2);
-
+                  const obs1 = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, radius * 1.8, 24), candyMat);
+                  obs1.rotation.z = Math.PI / 2; obs1.position.y = 1.2; obs1.castShadow = true; group.add(obs1);
+                  const obs2 = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, radius * 1.8, 24), candyMat);
+                  obs2.rotation.x = Math.PI / 2; obs2.position.y = 1.2; obs2.castShadow = true; group.add(obs2);
                   return [
-                      { x: 0, z: 0, halfX: radius * 0.9, halfZ: 0.8, align: 'X' },
-                      { x: 0, z: 0, halfX: 0.8, halfZ: radius * 0.9, align: 'Z' }
+                      { x: 0, z: 0, halfX: radius * 0.9, halfZ: 0.9, align: 'X' },
+                      { x: 0, z: 0, halfX: 0.9, halfZ: radius * 0.9, align: 'Z' }
                   ];
               };
 
               const addSegmentedObstacles = (group, innerRadius, outerRadius) => {
-                  const obsMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.6 });
-                  const length = outerRadius - innerRadius - 2; 
+                  const length = outerRadius - innerRadius - 2.5; 
                   const centerDist = innerRadius + (outerRadius - innerRadius) / 2;
-
                   const hitboxes = [];
                   const configs = [
                       { x: centerDist, z: 0, rz: Math.PI / 2, rx: 0, align: 'X' },
@@ -467,222 +590,522 @@
                       { x: 0, z: centerDist, rz: 0, rx: Math.PI / 2, align: 'Z' },
                       { x: 0, z: -centerDist, rz: 0, rx: Math.PI / 2, align: 'Z' },
                   ];
-
                   configs.forEach(cfg => {
-                      const obs = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, length, 16), obsMat);
-                      obs.rotation.z = cfg.rz; obs.rotation.x = cfg.rx;
-                      obs.position.set(cfg.x, 1.0, cfg.z);
-                      obs.castShadow = true;
+                      const obs = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, length, 24), candyMat);
+                      obs.rotation.z = cfg.rz; obs.rotation.x = cfg.rx; obs.position.set(cfg.x, 1.2, cfg.z); obs.castShadow = true;
                       group.add(obs);
-                      hitboxes.push({
-                          x: cfg.x, z: cfg.z,
-                          halfX: cfg.align === 'X' ? length / 2 : 0.8,
-                          halfZ: cfg.align === 'Z' ? length / 2 : 0.8,
-                          align: cfg.align
-                      });
+                      hitboxes.push({ x: cfg.x, z: cfg.z, halfX: cfg.align === 'X' ? length / 2 : 0.9, halfZ: cfg.align === 'Z' ? length / 2 : 0.9, align: cfg.align });
                   });
                   return hitboxes;
               };
 
               const addTurntable = (x, z, radius, mat, speed) => {
-                  const group = new THREE.Group();
-                  group.position.set(x, 0, z);
-                  const geo = new THREE.CylinderGeometry(radius, radius, 1.0, 32);
-                  const mesh = new THREE.Mesh(geo, mat);
-                  mesh.receiveShadow = true;
-                  mesh.castShadow = true;
-                  group.add(mesh);
+                  const group = new THREE.Group(); group.position.set(x, 0, z);
+                  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 1.0, 48), mat);
+                  mesh.receiveShadow = true; mesh.castShadow = true; group.add(mesh);
+                  const rimMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1, metalness: 0.1 });
+                  const rim = new THREE.Mesh(new THREE.TorusGeometry(radius + 0.2, 0.6, 16, 64), rimMat);
+                  rim.rotation.x = Math.PI / 2; group.add(rim);
+                  const hub = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.8, 1.5, 24), new THREE.MeshStandardMaterial({color: 0xfacc15, metalness: 0.5}));
+                  hub.position.y = 0.5; group.add(hub);
+
+                  const pillar = new THREE.Mesh(
+                      new THREE.CylinderGeometry(radius * 0.4, radius * 0.6, 120, 16),
+                      new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.8 })
+                  );
+                  pillar.position.y = -60;
+                  group.add(pillar);
 
                   let hitboxes = [];
-                  if (turntables.length > 1) {
-                      hitboxes = addStandardObstacle(group, radius);
-                  }
-
-                  scene.add(group);
-                  turntables.push({ group, x, z, r: radius, speed, hitboxes });
+                  if (turntables.length > 1) hitboxes = addStandardObstacle(group, radius);
+                  scene.add(group); turntables.push({ group, x, z, r: radius, speed, hitboxes });
               };
 
               addTurntable(0, -400, 12, mats[0], 0.035);
               addTurntable(0, -424, 12, mats[1], -0.04);
-
-              const forkCoords = [
-                  {x: 18, z: -444}, 
-                  {x: 34, z: -464}, 
-                  {x: 48, z: -486}, 
-                  {x: 60, z: -510}, 
-                  {x: 70, z: -535}, 
-                  {x: 70, z: -560}, 
-                  {x: 70, z: -585}, 
-                  {x: 60, z: -610}, 
-                  {x: 46, z: -634}, 
-                  {x: 28, z: -656}  
-              ];
-
+              const forkCoords = [ {x: 18, z: -444}, {x: 34, z: -464}, {x: 48, z: -486}, {x: 60, z: -510}, {x: 70, z: -535}, {x: 70, z: -560}, {x: 70, z: -585}, {x: 60, z: -610}, {x: 46, z: -634}, {x: 28, z: -656} ];
               for(let i = 0; i < 10; i++) {
                   const pos = forkCoords[i];
-                  const speedL = (i % 2 === 0 ? 1 : -1) * (0.025 + Math.random() * 0.02);
-                  const speedR = (i % 2 === 0 ? -1 : 1) * (0.025 + Math.random() * 0.02);
-                  addTurntable(-pos.x, pos.z, 12, mats[i % 3], speedL);
-                  addTurntable(pos.x, pos.z, 12, mats[(i + 1) % 3], speedR);
+                  addTurntable(-pos.x, pos.z, 12, mats[i % 3], (i % 2 === 0 ? 1 : -1) * (0.025 + Math.random() * 0.02));
+                  addTurntable(pos.x, pos.z, 12, mats[(i + 1) % 3], (i % 2 === 0 ? -1 : 1) * (0.025 + Math.random() * 0.02));
               }
-
               addTurntable(0, -685, 20, mats[2], 0.03);
               turntablesRef.current = turntables;
 
-
-              // === 构建第二关：大摆锤 (Pendulums) ===
               const pendulums = [];
-              const pPoleMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8, roughness: 0.2 });
-              const pHeadMat = new THREE.MeshStandardMaterial({ color: 0xf43f5e, metalness: 0.3, roughness: 0.4 });
-              const pPivotMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
-
+              const pPoleMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.1, roughness: 0.2 });
+              const pHeadMat = new THREE.MeshStandardMaterial({ color: 0xf472b6, metalness: 0.1, roughness: 0.3 }); 
+              
               const addPendulum = (x, z, delay) => {
-                  const pivot = new THREE.Group();
-                  pivot.position.set(x, 22, z); // 支点在高空
+                  const baseGroup = new THREE.Group(); 
+                  baseGroup.position.set(x, 0, z);
+
+                  const pivot = new THREE.Group(); pivot.position.set(0, 24, 0); 
+                  const pivotBox = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.5, 16, 32), new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.2 }));
+                  pivotBox.rotation.y = Math.PI / 2;
+                  pivotBox.castShadow = true; pivot.add(pivotBox);
+                  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 22, 16), pPoleMat); 
+                  pole.position.y = -11; pole.castShadow = true; pivot.add(pole);
+                  const head = new THREE.Mesh(new THREE.SphereGeometry(4.2, 32, 32), pHeadMat); 
+                  head.position.y = -22; head.castShadow = true; pivot.add(head);
                   
-                  // 支点底座
-                  const pivotBox = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), pPivotMat);
-                  pivotBox.castShadow = true;
-                  pivot.add(pivotBox);
+                  const frameMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.1, metalness: 0.1 }); 
+                  const jointMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.2 }); 
                   
-                  // 摆杆
-                  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 20, 16), pPoleMat);
-                  pole.position.y = -10;
-                  pole.castShadow = true;
-                  pivot.add(pole);
+                  const archGroup = new THREE.Group();
                   
-                  // 致命重锤
-                  const head = new THREE.Mesh(new THREE.SphereGeometry(3.5, 32, 32), pHeadMat);
-                  head.position.y = -20;
-                  head.castShadow = true;
-                  pivot.add(head);
+                  const legL = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 100, 16), frameMat);
+                  legL.position.set(-35, -20, 0); legL.castShadow = true;
+                  const legR = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 100, 16), frameMat);
+                  legR.position.set(35, -20, 0); legR.castShadow = true;
                   
-                  scene.add(pivot);
+                  const topBar = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 70, 16), frameMat);
+                  topBar.rotation.z = Math.PI / 2;
+                  topBar.position.set(0, 28, 0); topBar.castShadow = true;
+                  
+                  const jointL = new THREE.Mesh(new THREE.SphereGeometry(3.5, 32, 32), jointMat);
+                  jointL.position.set(-35, 28, 0); jointL.castShadow = true;
+                  const jointR = new THREE.Mesh(new THREE.SphereGeometry(3.5, 32, 32), jointMat);
+                  jointR.position.set(35, 28, 0); jointR.castShadow = true;
+                  
+                  const centerJoint = new THREE.Mesh(new THREE.SphereGeometry(3.5, 32, 32), jointMat);
+                  centerJoint.position.set(0, 28, 0); centerJoint.castShadow = true;
+                  
+                  const pillarL = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 60, 16), new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.8 }));
+                  pillarL.position.set(-35, -100, 0);
+                  const pillarR = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 60, 16), new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.8 }));
+                  pillarR.position.set(35, -100, 0);
+
+                  archGroup.add(legL, legR, topBar, jointL, jointR, centerJoint, pillarL, pillarR);
+                  
+                  baseGroup.add(pivot, archGroup);
+                  scene.add(baseGroup); 
                   pendulums.push({ pivot, head, delay });
               };
-
-              addPendulum(-70, -560, 400);   
-              addPendulum(70, -560, 1200);   
-              addPendulum(0, -560, 800);     
+              
+              addPendulum(-70, -560, 400); 
+              addPendulum(70, -560, 1200); 
+              addPendulum(0, -560, 800); 
               addPendulum(0, -685, 1600);    
               pendulumsRef.current = pendulums;
 
-
-              // === 构建第二关：捷径大转盘 ===
-              const texG1 = createPieTexture('#fbbf24', '#b45309');
-              const texG2 = createPieTexture('#fcd34d', '#d97706');
-              const matG1 = new THREE.MeshStandardMaterial({ map: texG1, roughness: 0.4, metalness: 0.5 });
-              const matG2 = new THREE.MeshStandardMaterial({ map: texG2, roughness: 0.4, metalness: 0.5 });
-              
-              const shortcutGroup = new THREE.Group();
-              shortcutGroup.position.set(0, 0, -560);
-              shortcutGroup.visible = false;
+              // === 捷径大转盘 ===
+              const texG1 = createPieTexture('#fbbf24', '#fde047', 24);
+              const texG2 = createPieTexture('#f59e0b', '#fef08a', 24);
+              const matG1 = new THREE.MeshStandardMaterial({ map: texG1, roughness: 0.3, metalness: 0.2 });
+              const matG2 = new THREE.MeshStandardMaterial({ map: texG2, roughness: 0.3, metalness: 0.2 });
+              const shortcutGroup = new THREE.Group(); shortcutGroup.position.set(0, 0, -560); shortcutGroup.visible = false;
 
               const createLayer = (radius, height, mat, type, innerR = 0) => {
                   const g = new THREE.Group();
-                  const m = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 1.0, 48), mat);
-                  m.receiveShadow = true; m.castShadow = true;
-                  g.add(m);
-                  g.position.y = height;
-                  
+                  const m = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 1.2, 64), mat);
+                  m.receiveShadow = true; m.castShadow = true; g.add(m); g.position.y = height;
+                  const rim = new THREE.Mesh(new THREE.TorusGeometry(radius + 0.2, 0.6, 16, 64), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1 }));
+                  rim.rotation.x = Math.PI / 2; g.add(rim);
+
                   let hitboxes = [];
-                  if (type === 'INNER') hitboxes = addCrossObstacles(g, radius);
-                  else if (type === 'SEGMENTED') hitboxes = addSegmentedObstacles(g, innerR, radius);
-                  
-                  shortcutGroup.add(g);
-                  return { group: g, r: radius, hitboxes };
+                  if (type === 'INNER') {
+                      hitboxes = addCrossObstacles(g, radius);
+                      const hub = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 3.0, 2.0, 32), new THREE.MeshStandardMaterial({color: 0xef4444}));
+                      hub.position.y = 1.0; g.add(hub);
+                  } else if (type === 'SEGMENTED') {
+                      hitboxes = addSegmentedObstacles(g, innerR, radius);
+                  }
+                  shortcutGroup.add(g); return { group: g, r: radius, hitboxes };
               };
 
               const l1 = createLayer(50, 0, matG1, 'SEGMENTED', 35);
-              const l2 = createLayer(35, 0.05, matG2, 'SEGMENTED', 20);
-              const l3 = createLayer(20, 0.1, matG1, 'INNER');
+              const l2 = createLayer(35, 0.1, matG2, 'SEGMENTED', 20); 
+              const l3 = createLayer(20, 0.2, matG1, 'INNER');
+
+              const shortcutPillar = new THREE.Mesh(
+                  new THREE.CylinderGeometry(18, 25, 120, 32),
+                  new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.8 })
+              );
+              shortcutPillar.position.y = -60;
+              shortcutGroup.add(shortcutPillar);
               scene.add(shortcutGroup);
 
               const bridgesGroup = new THREE.Group();
-              const bridgeMat = new THREE.MeshStandardMaterial({color: 0x8b5cf6});
+              const bridgeMat = new THREE.MeshStandardMaterial({color: 0x06b6d4, roughness: 0.2, metalness: 0.1});
+              const b1 = new THREE.Mesh(new THREE.BoxGeometry(6, 1.5, 74), bridgeMat); b1.position.set(0, 0, -473); b1.receiveShadow = true; b1.castShadow = true;
+              const b2 = new THREE.Mesh(new THREE.BoxGeometry(16, 1.5, 55), bridgeMat); b2.position.set(0, 0, -637.5); b2.receiveShadow = true; b2.castShadow = true;
               
-              const b1 = new THREE.Mesh(new THREE.BoxGeometry(6, 1.0, 74), bridgeMat);
-              b1.position.set(0, 0, -473); b1.receiveShadow = true; b1.castShadow = true;
-              
-              const b2 = new THREE.Mesh(new THREE.BoxGeometry(16, 1.0, 55), bridgeMat);
-              b2.position.set(0, 0, -637.5); b2.receiveShadow = true; b2.castShadow = true;
-              
-              bridgesGroup.add(b1, b2);
-              bridgesGroup.visible = false;
-              scene.add(bridgesGroup);
+              const b1Pillar = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 4, 120, 8), new THREE.MeshStandardMaterial({color: 0x334155}));
+              b1Pillar.position.set(0, -60, -473);
+              const b2Pillar = new THREE.Mesh(new THREE.CylinderGeometry(6, 10, 120, 16), new THREE.MeshStandardMaterial({color: 0x334155}));
+              b2Pillar.position.set(0, -60, -637.5);
 
-              shortcutRef.current = {
-                  mainGroup: shortcutGroup,
-                  bridgesGroup: bridgesGroup,
-                  active: false,
-                  x: 0, z: -560, y: 0,
-                  layers: [
-                      { ...l1, speed: 0.008 },  
-                      { ...l2, speed: -0.045 }, 
-                      { ...l3, speed: 0.065 }   
-                  ]
+              bridgesGroup.add(b1, b2, b1Pillar, b2Pillar); bridgesGroup.visible = false; scene.add(bridgesGroup);
+
+              shortcutRef.current = { mainGroup: shortcutGroup, bridgesGroup: bridgesGroup, active: false, x: 0, z: -560, y: 0, layers: [ { ...l1, speed: 0.008 }, { ...l2, speed: -0.045 }, { ...l3, speed: 0.065 } ] };
+
+              // === 新增 第三关：U型极速水滑道 ===
+              const slideGroup = new THREE.Group();
+              const slideObjects = [];
+              
+              const curvePoints = [
+                  new THREE.Vector3(0, 1.5, -780),      
+                  new THREE.Vector3(0, -10, -900),       
+                  new THREE.Vector3(-30, -30, -1100),    
+                  new THREE.Vector3(30, -60, -1350),    
+                  new THREE.Vector3(20, -90, -1600),   
+                  new THREE.Vector3(-20, -120, -1850),   
+                  new THREE.Vector3(0, -140, -2100),   
+                  new THREE.Vector3(0, -120, -2300),  
+                  new THREE.Vector3(0, 10, -2500)     
+              ];
+              const slideCurve = new THREE.CatmullRomCurve3(curvePoints);
+              
+              const uShape = new THREE.Shape();
+              uShape.moveTo(-22, 25); 
+              uShape.quadraticCurveTo(-22, 0, 0, 0); 
+              uShape.quadraticCurveTo(22, 0, 22, 25); 
+              uShape.lineTo(24, 25);
+              uShape.quadraticCurveTo(24, -2, 0, -2);
+              uShape.quadraticCurveTo(-24, -2, -24, 25);
+              uShape.closePath();
+
+              const extrudeSettings = { steps: 800, extrudePath: slideCurve, bevelEnabled: false };
+              const slideGeo = new THREE.ExtrudeGeometry(uShape, extrudeSettings);
+              const slideMat = new THREE.MeshStandardMaterial({ 
+                  color: 0x38bdf8, roughness: 0.1, metalness: 0.1, 
+                  transparent: true, opacity: 0.85, side: THREE.DoubleSide 
+              });
+              const slideTrackMesh = new THREE.Mesh(slideGeo, slideMat);
+              slideTrackMesh.receiveShadow = true;
+              slideTrackMesh.frustumCulled = false; 
+              slideGroup.add(slideTrackMesh);
+
+              const bottomArch = new THREE.Mesh(
+                  new THREE.TorusGeometry(35, 2, 16, 64, Math.PI), 
+                  new THREE.MeshStandardMaterial({color: 0x22d3ee, emissive: 0x22d3ee, emissiveIntensity: 1.5})
+              );
+              bottomArch.position.set(0, -150, -2700);
+              scene.add(bottomArch);
+
+              // 【美化重塑】香蕉皮变得更厚、更立体，且翘起一定角度
+              const createBanana = () => {
+                  const g = new THREE.Group();
+                  const mat = new THREE.MeshStandardMaterial({color: 0xfacc15, emissive: 0xa16207, emissiveIntensity: 0.3, roughness: 0.4}); 
+                  for(let i=0; i<4; i++) {
+                      const peel = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 16), mat);
+                      // 增大 Y 轴缩放，让它不再是一张纸，更有体积感
+                      peel.scale.set(0.45, 0.35, 2.2); 
+                      peel.position.set(Math.cos(i*Math.PI/2)*0.8, 0.4, Math.sin(i*Math.PI/2)*0.8);
+                      peel.rotation.y = -i*Math.PI/2;
+                      // 增大旋转角度，让香蕉皮翘起来
+                      peel.rotation.x = Math.PI / 4;
+                      g.add(peel);
+                  }
+                  // 加上深棕色的香蕉蒂头
+                  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.25, 0.8), new THREE.MeshStandardMaterial({color: 0x654321}));
+                  stem.position.y = 0.9;
+                  g.add(stem);
+
+                  g.scale.set(1.5, 1.5, 1.5); 
+                  return g;
+              }
+
+              const createRoadblock = () => {
+                  const g = new THREE.Group();
+                  const standMat = new THREE.MeshStandardMaterial({color: 0x333333, roughness: 0.8});
+                  const boardMat = new THREE.MeshStandardMaterial({color: 0xfacc15, roughness: 0.5}); 
+                  const stripeMat = new THREE.MeshStandardMaterial({color: 0x111111, roughness: 0.5}); 
+
+                  const standL = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 2), standMat);
+                  standL.position.set(-1.8, 1, 0);
+                  const standR = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 2), standMat);
+                  standR.position.set(1.8, 1, 0);
+
+                  const board = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.8, 0.2), boardMat);
+                  board.position.set(0, 1.4, 0);
+
+                  for(let i=-1; i<=1; i++) {
+                      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.81, 0.21), stripeMat);
+                      stripe.position.set(i*1.2, 1.4, 0);
+                      stripe.rotation.z = Math.PI/6;
+                      g.add(stripe);
+                  }
+
+                  g.add(standL, standR, board);
+                  g.scale.set(1.2, 1.2, 1.2);
+                  return g;
+              }
+
+              const createBoostPad = () => {
+                  const g = new THREE.Group();
+                  const mat = new THREE.MeshStandardMaterial({color: 0xff3300, emissive: 0xff3300, emissiveIntensity: 2.5});
+                  for(let i=0; i<3; i++) {
+                      const bar = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.2, 0.8), mat);
+                      bar.position.set(0, 0, i * 1.5 - 1.5);
+                      g.add(bar);
+                  }
+                  g.scale.set(1.5, 1.5, 1.5);
+                  return g;
+              }
+
+              // 【核心优化】将道具生成的起点从 0.02 延后到 0.12，给玩家留下充足的入场反应缓冲时间！
+              for (let t = 0.12; t < 0.75; t += 0.05) {
+                  const rand = Math.random();
+                  let type = 'banana';
+                  if (rand > 0.66) type = 'boost';
+                  else if (rand > 0.33) type = 'roadblock';
+
+                  const offset = (Math.random() - 0.5) * 22; 
+                  
+                  const pt = slideCurve.getPointAt(t);
+                  const tangent = slideCurve.getTangentAt(t);
+                  const up = new THREE.Vector3(0, 1, 0);
+                  const binormal = new THREE.Vector3().crossVectors(tangent, up).normalize();
+                  const normal = new THREE.Vector3().crossVectors(binormal, tangent).normalize();
+
+                  const heightRise = Math.pow(Math.abs(offset) / 20, 2.5) * 20; 
+                  const basePos = pt.clone().add(binormal.clone().multiplyScalar(offset));
+                  
+                  let mesh;
+                  if (type === 'boost') {
+                      const finalPos = basePos.clone().add(normal.clone().multiplyScalar(heightRise + 0.3));
+                      mesh = createBoostPad();
+                      mesh.position.copy(finalPos);
+                      const m = new THREE.Matrix4();
+                      m.makeBasis(binormal.clone().negate(), normal, tangent.clone().negate()); 
+                      mesh.quaternion.setFromRotationMatrix(m);
+                  } else if (type === 'roadblock') {
+                      const finalPos = basePos.clone().add(normal.clone().multiplyScalar(heightRise + 0.3));
+                      mesh = createRoadblock();
+                      mesh.position.copy(finalPos);
+                      const m = new THREE.Matrix4();
+                      m.makeBasis(binormal.clone().negate(), normal, tangent.clone().negate()); 
+                      mesh.quaternion.setFromRotationMatrix(m);
+                  } else {
+                      const finalPos = basePos.clone().add(normal.clone().multiplyScalar(heightRise + 0.3));
+                      mesh = createBanana();
+                      mesh.position.copy(finalPos);
+                      const m = new THREE.Matrix4();
+                      m.makeBasis(binormal.clone().negate(), normal, tangent.clone().negate()); 
+                      mesh.quaternion.setFromRotationMatrix(m);
+                  }
+                  
+                  slideGroup.add(mesh);
+                  slideObjects.push({ t, offset, type, mesh, active: true });
+              }
+              
+              scene.add(slideGroup);
+              slideObjectsRef.current = { objects: slideObjects, curve: slideCurve };
+
+              // === 游乐园梦幻远景 ===
+              const sceneryGroup = new THREE.Group();
+              
+              const cloudMat = new THREE.MeshStandardMaterial({color: 0xffffff, roughness: 1});
+              const createCloud = (x, y, z, scale) => {
+                  const cloud = new THREE.Group();
+                  const p1 = new THREE.Mesh(new THREE.SphereGeometry(2, 16, 16), cloudMat); p1.position.set(0,0,0);
+                  const p2 = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 16), cloudMat); p2.position.set(-2,-0.5,0);
+                  const p3 = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 16), cloudMat); p3.position.set(2,-0.5,0);
+                  const p4 = new THREE.Mesh(new THREE.SphereGeometry(1.2, 16, 16), cloudMat); p4.position.set(0,1,1);
+                  cloud.add(p1, p2, p3, p4);
+                  cloud.position.set(x, y, z); cloud.scale.setScalar(scale);
+                  sceneryRef.current.push({ mesh: cloud, type: 'cloud', origY: y, speed: 0.001 + Math.random()*0.001, offset: Math.random()*10 });
+                  sceneryGroup.add(cloud);
               };
+              for(let i=0; i<60; i++) {
+                  let cx = (Math.random()-0.5)*1500;
+                  if (Math.abs(cx) < 80) cx = Math.sign(cx) * 80 + cx; 
+                  let cy = Math.random() > 0.5 ? 40 + Math.random()*60 : -20 - Math.random()*30;
+                  let cz = 200 - Math.random()*3000;
+                  createCloud(cx, cy, cz, 3 + Math.random()*6);
+              }
 
-              const triggerLine2 = new THREE.Mesh(new THREE.BoxGeometry(30, 1.1, 3), new THREE.MeshStandardMaterial({ color: 0xfacc15 }));
-              triggerLine2.position.set(0, 0, QUIZ2_TRIGGER_Z);
-              scene.add(triggerLine2);
+              const rainbowColors = [0xef4444, 0xf97316, 0xfde047, 0x4ade80, 0x3b82f6, 0xa855f7];
+              rainbowColors.forEach((c, i) => {
+                  const rGeo = new THREE.TorusGeometry(350 - i*12, 10, 16, 64, Math.PI);
+                  const rMat = new THREE.MeshBasicMaterial({color: c, side: THREE.DoubleSide});
+                  const r = new THREE.Mesh(rGeo, rMat);
+                  r.position.set(0, -50, -800); r.rotation.y = Math.PI * 0.1;
+                  scene.add(r);
+              });
 
-              const endZone2 = new THREE.Mesh(new THREE.BoxGeometry(100, 1, 80), new THREE.MeshStandardMaterial({ color: 0x10b981 }));
-              endZone2.position.set(0, 0, -745); 
-              endZone2.receiveShadow = true;
-              scene.add(endZone2);
+              const addBalloon = (x, y, z, color) => {
+                  const bGroup = new THREE.Group(); bGroup.position.set(x, y, z);
+                  const bMesh = new THREE.Mesh(new THREE.SphereGeometry(8, 32, 32), new THREE.MeshStandardMaterial({ color: color, roughness: 0.3 }));
+                  const basket = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), new THREE.MeshStandardMaterial({ color: 0xd97706 })); basket.position.y = -10;
+                  const ropeMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+                  const rope1 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 5), ropeMat); rope1.position.set(1.5, -8, 1.5); rope1.rotation.z = Math.PI/8; rope1.rotation.x = -Math.PI/8;
+                  const rope2 = rope1.clone(); rope2.position.set(-1.5, -8, 1.5); rope2.rotation.z = -Math.PI/8;
+                  const rope3 = rope1.clone(); rope3.position.set(1.5, -8, -1.5); rope3.rotation.x = Math.PI/8; rope3.rotation.z = Math.PI/8;
+                  const rope4 = rope1.clone(); rope4.position.set(-1.5, -8, -1.5); rope4.rotation.x = Math.PI/8; rope4.rotation.z = -Math.PI/8;
+                  bGroup.add(bMesh, basket, rope1, rope2, rope3, rope4);
+                  sceneryRef.current.push({ mesh: bGroup, type: 'balloon', origY: y, speed: 0.001 + Math.random()*0.001, offset: Math.random()*Math.PI*2 });
+                  sceneryGroup.add(bGroup);
+              };
+              addBalloon(-150, 80, 20, 0xf472b6); addBalloon(180, 100, -150, 0x38bdf8);
+              addBalloon(-200, 120, -400, 0xfbbf24); addBalloon(160, 70, -600, 0xa78bfa);
+
+              const addFerrisWheel = (x, y, z, size, color) => {
+                  const fwGroup = new THREE.Group(); fwGroup.position.set(x, y, z);
+                  const wheel = new THREE.Group();
+                  const rimMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.3 });
+                  wheel.add(new THREE.Mesh(new THREE.TorusGeometry(size, 2, 16, 64), rimMat));
+                  
+                  const cabinMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.2 });
+                  for(let i=0; i<16; i++) {
+                      const angle = (i/16)*Math.PI*2;
+                      const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, size), rimMat);
+                      spoke.position.set(Math.cos(angle)*size/2, Math.sin(angle)*size/2, 0); spoke.rotation.z = angle; wheel.add(spoke);
+                      const cabin = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 5, 16), cabinMat);
+                      cabin.rotation.x = Math.PI/2; cabin.position.set(Math.cos(angle)*size, Math.sin(angle)*size, 0);
+                      const cabinWrapper = new THREE.Group(); cabinWrapper.position.copy(cabin.position); cabin.position.set(0,0,0); cabinWrapper.add(cabin); wheel.add(cabinWrapper);
+                      sceneryRef.current.push({ mesh: cabinWrapper, type: 'cabin' });
+                  }
+                  fwGroup.add(wheel);
+                  const stand = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 6, size*1.5), new THREE.MeshStandardMaterial({ color: 0x94a3b8 }));
+                  stand.position.y = -size*0.5; fwGroup.add(stand);
+                  scene.add(fwGroup); sceneryRef.current.push({ mesh: wheel, type: 'wheel', speed: 0.002 });
+              };
+              addFerrisWheel(-220, 30, -200, 60, 0xf43f5e); addFerrisWheel(250, 40, -550, 70, 0x3b82f6);
+
+              const toyColors = [0xf472b6, 0x38bdf8, 0xfacc15, 0xa855f7, 0x4ade80, 0xf87171];
+              for(let i=0; i<150; i++) {
+                  const tx = (Math.random()-0.5)*2000;
+                  const ty = -80 + Math.random()*250;
+                  const tz = 300 - Math.random()*3000;
+                  if (Math.abs(tx) < 150 && ty > -20 && ty < 50) continue; 
+                  
+                  const type = Math.floor(Math.random()*4);
+                  const color = toyColors[Math.floor(Math.random()*toyColors.length)];
+                  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.2, metalness: 0.1 });
+                  let mesh;
+                  const size = 5 + Math.random()*15;
+                  if(type === 0) mesh = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), mat);
+                  else if(type === 1) mesh = new THREE.Mesh(new THREE.SphereGeometry(size, 16, 16), mat);
+                  else if(type === 2) mesh = new THREE.Mesh(new THREE.TorusGeometry(size, size/3, 16, 32), mat);
+                  else mesh = new THREE.Mesh(new THREE.ConeGeometry(size, size*2, 16), mat);
+                  
+                  mesh.position.set(tx, ty, tz);
+                  mesh.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+                  
+                  const toyGroup = new THREE.Group(); toyGroup.add(mesh); sceneryGroup.add(toyGroup);
+                  sceneryRef.current.push({ 
+                      mesh: toyGroup, type: 'toy', 
+                      rx: (Math.random()-0.5)*0.02, ry: (Math.random()-0.5)*0.02, 
+                      origY: ty, speed: 0.0005 + Math.random()*0.001, offset: Math.random()*10 
+                  });
+              }
+
+              scene.add(sceneryGroup);
 
               // === 动画循环 ===
               const animate = () => {
                 requestRef.current = requestAnimationFrame(animate);
                 
-                if (gameStateRef.current === 'PLAYING' || gameStateRef.current === 'PLAYING_RESUME') {
+                if (gameStateRef.current === 'PLAYING' || gameStateRef.current === 'PLAYING_RESUME' || gameStateRef.current === 'WIN') {
                   updatePhysics(THREE);
                 }
 
-                const blinkTime = Date.now() * 0.008; 
+                const timeNow = Date.now();
+                const blinkTime = timeNow * 0.008; 
                 hexesRef.current.forEach(hex => {
                   if (hex.isGlowing && hex.outerMat && hex.innerMat) {
                     const isBright = Math.sin(blinkTime) > 0;
-                    hex.outerMat.emissiveIntensity = isBright ? 0.8 : 0.1;
-                    hex.innerMat.emissiveIntensity = isBright ? 0.35 : 0.05; 
+                    hex.outerMat.emissiveIntensity = isBright ? 1.0 : 0.4;
+                    hex.innerMat.emissiveIntensity = isBright ? 0.8 : 0.2; 
                   }
                 });
 
-                turntablesRef.current.forEach(disk => {
-                   disk.group.rotation.y -= disk.speed; 
+                const speedMult = difficultyRef.current === 'HELL' ? 1.5 : 1.0;
+
+                turntablesRef.current.forEach(disk => { 
+                    if(disk?.group?.rotation) disk.group.rotation.y -= disk.speed * speedMult; 
                 });
                 if (shortcutRef.current && shortcutRef.current.active) {
-                   shortcutRef.current.layers.forEach(layer => {
-                       layer.group.rotation.y -= layer.speed;
+                   shortcutRef.current.layers.forEach(layer => { 
+                       if(layer?.group?.rotation) layer.group.rotation.y -= layer.speed * speedMult; 
                    });
                 }
 
-                if (playerRef.current && playerRef.current.mesh) {
-                  // 将摄像机绑定到角色的视角朝向 (camYaw)
-                  const playerCamYaw = playerRef.current.camYaw;
-                  const camDist = 12; 
-                  const camHeight = 7; 
-                  
-                  const targetCamPos = new THREE.Vector3(
-                    playerRef.current.mesh.position.x - Math.sin(playerCamYaw) * camDist, 
-                    playerRef.current.mesh.position.y + camHeight, 
-                    playerRef.current.mesh.position.z - Math.cos(playerCamYaw) * camDist
-                  );
-                  
-                  const lookAhead = 10;
-                  const targetLookAt = new THREE.Vector3(
-                    playerRef.current.mesh.position.x + Math.sin(playerCamYaw) * lookAhead, 
-                    playerRef.current.mesh.position.y + 1.0, 
-                    playerRef.current.mesh.position.z + Math.cos(playerCamYaw) * lookAhead
-                  );
+                sceneryRef.current.forEach(item => {
+                    if (!item || !item.mesh) return;
+                    if (item.type === 'balloon' || item.type === 'cloud') {
+                        if(item.mesh.position) item.mesh.position.y = item.origY + Math.sin(timeNow * item.speed + item.offset) * 10;
+                    } else if (item.type === 'wheel') {
+                        if(item.mesh.rotation) item.mesh.rotation.z -= item.speed;
+                    } else if (item.type === 'cabin') {
+                        if(item.mesh.rotation) item.mesh.rotation.z += 0.002; 
+                    } else if (item.type === 'toy') {
+                        if(item.mesh.rotation) {
+                            item.mesh.rotation.x += item.rx;
+                            item.mesh.rotation.y += item.ry;
+                        }
+                        if(item.mesh.position) item.mesh.position.y = item.origY + Math.sin(timeNow * item.speed + item.offset) * 20;
+                    }
+                });
 
-                  if (!cameraRef.current.lookAtTarget) {
-                      cameraRef.current.lookAtTarget = new THREE.Vector3().copy(targetLookAt);
+                if (playerRef.current && playerRef.current.mesh) {
+                  const playerCamYaw = playerRef.current.camYaw;
+                  let camTarget, camPos;
+                  let lerpSpeed = 0.15; 
+
+                  if (playerRef.current.slideT !== undefined && slideObjectsRef.current && slideObjectsRef.current.curve) {
+                      const slideCurve = slideObjectsRef.current.curve;
+                      const pt = slideCurve.getPointAt(playerRef.current.slideT);
+                      const tangent = slideCurve.getTangentAt(playerRef.current.slideT);
+                      
+                      const boostFOV = (Date.now() < playerRef.current.boostUntil) ? 75 : 55;
+                      if (camera.fov) {
+                          camera.fov += (boostFOV - camera.fov) * 0.1;
+                          camera.updateProjectionMatrix();
+                      }
+
+                      camTarget = pt.clone().add(tangent.clone().multiplyScalar(20));
+                      camPos = pt.clone().sub(tangent.clone().multiplyScalar(15)).add(new THREE.Vector3(0, 10, 0));
+                  } else if (playerRef.current.isFlung) {
+                      if (camera.fov && Math.abs(camera.fov - 25) > 1) {
+                          camera.fov += (25 - camera.fov) * 0.15; 
+                          camera.updateProjectionMatrix();
+                      }
+                      const camDist = 8;  
+                      const camHeight = 3.0; 
+                      const lookAhead = 10; 
+                      
+                      camPos = new THREE.Vector3(
+                        playerRef.current.mesh.position.x - Math.sin(playerCamYaw) * camDist, 
+                        playerRef.current.mesh.position.y + camHeight, 
+                        playerRef.current.mesh.position.z - Math.cos(playerCamYaw) * camDist
+                      );
+                      camTarget = new THREE.Vector3(
+                        playerRef.current.mesh.position.x + Math.sin(playerCamYaw) * lookAhead, 
+                        playerRef.current.mesh.position.y - 1.0, 
+                        playerRef.current.mesh.position.z + Math.cos(playerCamYaw) * lookAhead
+                      );
+                      lerpSpeed = 0.5; 
+                  } else {
+                      if (camera.fov && Math.abs(camera.fov - 50) > 1) {
+                          camera.fov += (50 - camera.fov) * 0.1;
+                          camera.updateProjectionMatrix();
+                      }
+
+                      const camDist = 14; 
+                      const camHeight = 8; 
+                      const lookAhead = 12;
+                      
+                      camPos = new THREE.Vector3(
+                        playerRef.current.mesh.position.x - Math.sin(playerCamYaw) * camDist, 
+                        playerRef.current.mesh.position.y + camHeight, 
+                        playerRef.current.mesh.position.z - Math.cos(playerCamYaw) * camDist
+                      );
+                      
+                      camTarget = new THREE.Vector3(
+                        playerRef.current.mesh.position.x + Math.sin(playerCamYaw) * lookAhead, 
+                        playerRef.current.mesh.position.y + 1.0, 
+                        playerRef.current.mesh.position.z + Math.cos(playerCamYaw) * lookAhead
+                      );
                   }
 
-                  camera.position.lerp(targetCamPos, 0.1); 
-                  cameraRef.current.lookAtTarget.lerp(targetLookAt, 0.1); 
+                  if (!cameraRef.current.lookAtTarget) cameraRef.current.lookAtTarget = new THREE.Vector3().copy(camTarget);
+
+                  camera.position.lerp(camPos, lerpSpeed); 
+                  cameraRef.current.lookAtTarget.lerp(camTarget, lerpSpeed); 
                   camera.lookAt(cameraRef.current.lookAtTarget);
                 }
 
@@ -699,23 +1122,19 @@
               const script = document.createElement('script');
               script.src = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
               script.onload = initEngine;
-              script.onerror = () => console.error("Three.js load failed!");
               document.head.appendChild(script);
             }
 
             return () => {
-              isMounted = false;
-              cancelAnimationFrame(requestRef.current);
+              isMounted = false; cancelAnimationFrame(requestRef.current);
               if (resizeObserverRef.current && mountRef.current) resizeObserverRef.current.disconnect();
               if (rendererRef.current && mountRef.current) {
-                 if (mountRef.current.contains(rendererRef.current.domElement)) {
-                     mountRef.current.removeChild(rendererRef.current.domElement);
-                 }
+                 if (mountRef.current.contains(rendererRef.current.domElement)) mountRef.current.removeChild(rendererRef.current.domElement);
               }
             };
-          }, []);
+          }, [applyDifficultyToHexes]);
 
-          // === 虚拟摇杆与触控处理 ===
+          // === 虚拟摇杆与控制 ===
           const getJoystickTouch = (touches) => {
               for(let i=0; i<touches.length; i++) {
                   const t = touches[i];
@@ -723,91 +1142,65 @@
               }
               return null;
           };
-
           const handleTouchMove = useCallback((e) => {
               if (!joystickBaseRef.current) return;
-              const touch = getJoystickTouch(e.touches);
-              if (!touch) return;
+              const touch = getJoystickTouch(e.touches); if (!touch) return;
               const rect = joystickBaseRef.current.getBoundingClientRect();
-              const centerX = rect.left + rect.width / 2;
-              const centerY = rect.top + rect.height / 2;
+              const centerX = rect.left + rect.width / 2; const centerY = rect.top + rect.height / 2;
               const maxDist = (rect.width / 2) - 24; 
-
-              let dx = touch.clientX - centerX;
-              let dy = touch.clientY - centerY;
+              let dx = touch.clientX - centerX; let dy = touch.clientY - centerY;
               const dist = Math.sqrt(dx * dx + dy * dy);
-
-              if (dist > maxDist) {
-                  dx = (dx / dist) * maxDist;
-                  dy = (dy / dist) * maxDist;
-              }
-              setJoystickPos({ x: dx, y: dy });
-              joystickRef.current = { x: dx / maxDist, y: dy / maxDist };
+              if (dist > maxDist) { dx = (dx / dist) * maxDist; dy = (dy / dist) * maxDist; }
+              setJoystickPos({ x: dx, y: dy }); joystickRef.current = { x: dx / maxDist, y: dy / maxDist };
           }, []);
-
           const handleTouchEnd = useCallback((e) => {
               const touch = getJoystickTouch(e.touches);
-              if (!touch) {
-                 setJoystickPos({ x: 0, y: 0 });
-                 joystickRef.current = { x: 0, y: 0 };
-              }
+              if (!touch) { setJoystickPos({ x: 0, y: 0 }); joystickRef.current = { x: 0, y: 0 }; }
           }, []);
-
           const handleJumpStart = () => { keysRef.current[' '] = true; };
           const handleJumpEnd = () => { keysRef.current[' '] = false; };
 
-          // 【多层动态防穿模碰撞检测算法】
+          // 【多层解析防穿模碰撞检测算法】
           const checkObstacleCollision = (player, diskGroup, hitboxes, cx, cz, diskSpeed = 0) => {
               if (!hitboxes || hitboxes.length === 0) return false;
               
               const playerPosLocal = new window.THREE.Vector3(player.mesh.position.x - cx, 0, player.mesh.position.z - cz);
-              playerPosLocal.applyAxisAngle(new window.THREE.Vector3(0, 1, 0), -diskGroup.rotation.y);
+              if(diskGroup?.rotation) playerPosLocal.applyAxisAngle(new window.THREE.Vector3(0, 1, 0), -diskGroup.rotation.y);
 
               if (player.mesh.position.y >= 2.8) return false; 
-
               const PLAYER_RADIUS = 0.85; 
 
               for (let box of hitboxes) {
-                  const dx = playerPosLocal.x - box.x;
-                  const dz = playerPosLocal.z - box.z;
-
-                  let dynamicHalfX = box.halfX + PLAYER_RADIUS;
-                  let dynamicHalfZ = box.halfZ + PLAYER_RADIUS;
+                  const dx = playerPosLocal.x - box.x; const dz = playerPosLocal.z - box.z;
+                  let dynamicHalfX = box.halfX + PLAYER_RADIUS; let dynamicHalfZ = box.halfZ + PLAYER_RADIUS;
                   let sweepDist = 0;
 
                   if (box.align === 'X') {
-                      sweepDist = Math.abs(diskSpeed) * Math.abs(playerPosLocal.x) * 1.5;
-                      dynamicHalfZ += sweepDist; 
+                      sweepDist = Math.abs(diskSpeed) * Math.abs(playerPosLocal.x) * 1.5; dynamicHalfZ += sweepDist; 
                   } else if (box.align === 'Z') {
-                      sweepDist = Math.abs(diskSpeed) * Math.abs(playerPosLocal.z) * 1.5;
-                      dynamicHalfX += sweepDist;
+                      sweepDist = Math.abs(diskSpeed) * Math.abs(playerPosLocal.z) * 1.5; dynamicHalfX += sweepDist;
                   }
 
                   if (Math.abs(dx) < dynamicHalfX && Math.abs(dz) < dynamicHalfZ) {
                        let pushSignX = 0, pushSignZ = 0;
-                       
                        if (box.align === 'X') {
                            let pushSign = dz >= 0 ? 1 : -1;
                            const cylVelZ = diskSpeed * playerPosLocal.x;
                            if (Math.abs(cylVelZ) > 0.02) pushSign = Math.sign(cylVelZ);
-                           
-                           playerPosLocal.z = box.z + pushSign * (dynamicHalfZ + 0.05);
-                           pushSignZ = pushSign;
+                           playerPosLocal.z = box.z + pushSign * (dynamicHalfZ + 0.05); pushSignZ = pushSign;
                        } else if (box.align === 'Z') {
                            let pushSign = dx >= 0 ? 1 : -1;
                            const cylVelX = -diskSpeed * playerPosLocal.z;
                            if (Math.abs(cylVelX) > 0.02) pushSign = Math.sign(cylVelX);
-                           
-                           playerPosLocal.x = box.x + pushSign * (dynamicHalfX + 0.05);
-                           pushSignX = pushSign;
+                           playerPosLocal.x = box.x + pushSign * (dynamicHalfX + 0.05); pushSignX = pushSign;
                        }
 
-                       const correctedWorldPos = playerPosLocal.clone().applyAxisAngle(new window.THREE.Vector3(0, 1, 0), diskGroup.rotation.y);
-                       player.mesh.position.x = cx + correctedWorldPos.x;
-                       player.mesh.position.z = cz + correctedWorldPos.z;
-
-                       const pushLocal = new window.THREE.Vector3(pushSignX, 0, pushSignZ);
-                       pushLocal.applyAxisAngle(new window.THREE.Vector3(0, 1, 0), diskGroup.rotation.y);
+                       let correctedWorldPos = playerPosLocal.clone();
+                       if(diskGroup?.rotation) correctedWorldPos.applyAxisAngle(new window.THREE.Vector3(0, 1, 0), diskGroup.rotation.y);
+                       player.mesh.position.x = cx + correctedWorldPos.x; player.mesh.position.z = cz + correctedWorldPos.z;
+                       
+                       const pushLocal = new window.THREE.Vector3(pushSignX, 0, pushSignZ); 
+                       if(diskGroup?.rotation) pushLocal.applyAxisAngle(new window.THREE.Vector3(0, 1, 0), diskGroup.rotation.y);
                        
                        player.knockback.set(pushLocal.x * 1.2, 0, pushLocal.z * 1.2);
                        if (player.vel.y <= 0) player.vel.y = 0.3;
@@ -820,311 +1213,500 @@
           // === 物理与碰撞逻辑 ===
           const updatePhysics = (THREE) => {
             const player = playerRef.current;
-            if (!player || !player.mesh) return;
+            if (!player || !player.mesh || !player.mesh.position) return;
 
-            const maxSpeed = player.onTurntable ? 0.40 : 0.46; 
-            const accel = player.onTurntable ? 0.016 : 0.018;   
-            const friction = 0.97; 
-            const jumpForce = 0.52; 
-            const gravity = 0.025; 
-
-            let isMoving = false;
-            let currentlyGrounded = false; 
+            const maxSpeed = player.onTurntable ? 0.85 : 0.46; 
+            const accel = player.onTurntable ? 0.08 : 0.018;   
+            const friction = 0.97; const jumpForce = 0.52; const gravity = 0.025; 
+            let isMoving = false; let currentlyGrounded = false; 
             const timeNow = Date.now();
+            const pZ = player.mesh.position.z;
 
-            // === 碰撞检测：大摆锤 (Pendulums) ===
             pendulumsRef.current.forEach(p => {
-                p.pivot.rotation.z = Math.sin((timeNow + p.delay) * 0.0018) * (Math.PI / 2.2);
-                p.pivot.updateMatrixWorld(true);
-                
-                const headPos = new window.THREE.Vector3();
-                p.head.getWorldPosition(headPos);
-                
-                const dx = player.mesh.position.x - headPos.x;
-                const dy = player.mesh.position.y - headPos.y;
-                const dz = player.mesh.position.z - headPos.z;
-                const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-                
-                if (dist < 4.6) {
-                    const horizontalDist = Math.sqrt(dx*dx + dz*dz);
-                    const pushDirX = horizontalDist > 0 ? dx / horizontalDist : (Math.random() - 0.5);
-                    const pushDirZ = horizontalDist > 0 ? dz / horizontalDist : 1;
-                    player.knockback.set(pushDirX * 3.5, 0, pushDirZ * 3.5);
-                    player.vel.y = 0.55; 
+                if (p?.pivot?.rotation) {
+                    p.pivot.rotation.z = Math.sin((timeNow + p.delay) * 0.0018) * (Math.PI / 2.2); 
+                    p.pivot.updateMatrixWorld(true);
+                }
+                if (p?.head) {
+                    const headPos = new window.THREE.Vector3(); p.head.getWorldPosition(headPos);
+                    const dx = player.mesh.position.x - headPos.x; const dy = player.mesh.position.y - headPos.y; const dz = pZ - headPos.z;
+                    const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                    if (dist < 4.8) {
+                        const horizontalDist = Math.sqrt(dx*dx + dz*dz);
+                        const pushDirX = horizontalDist > 0 ? dx / horizontalDist : (Math.random() - 0.5);
+                        const pushDirZ = horizontalDist > 0 ? dz / horizontalDist : 1;
+                        player.knockback.set(pushDirX * 3.5, 0, pushDirZ * 3.5); player.vel.y = 0.55; 
+                    }
                 }
             });
 
-
-            if (currentStageRef.current === 1 && timeNow - lastFireTimeRef.current > 2000) { 
+            const ballFireInterval = difficultyRef.current === 'HELL' ? 1333 : 2000;
+            if (currentStageRef.current === 1 && timeNow - lastFireTimeRef.current > ballFireInterval) { 
                 const ball = new THREE.Mesh(new THREE.SphereGeometry(7, 32, 32), new THREE.MeshStandardMaterial({color: 0xef4444, roughness: 0.4}));
-                ball.position.set((Math.random() - 0.5) * 60, 7, -300 + 15); 
-                ball.castShadow = true;
-                sceneRef.current.add(ball);
-                ballsRef.current.push({ mesh: ball, active: true });
+                ball.position.set((Math.random() - 0.5) * 60, 7, -300 + 15); ball.castShadow = true;
+                sceneRef.current.add(ball); ballsRef.current.push({ mesh: ball, active: true });
                 lastFireTimeRef.current = timeNow;
             }
 
             ballsRef.current.forEach(ball => {
-                if (!ball.active) return;
+                if (!ball || !ball.active || !ball.mesh || !ball.mesh.position || !ball.mesh.rotation) return;
                 ball.mesh.position.z += 0.9; ball.mesh.rotation.x += 0.1; 
-
-                const dx = player.mesh.position.x - ball.mesh.position.x;
-                const dy = player.mesh.position.y - ball.mesh.position.y;
-                const dz = player.mesh.position.z - ball.mesh.position.z;
+                const dx = player.mesh.position.x - ball.mesh.position.x; const dy = player.mesh.position.y - ball.mesh.position.y; const dz = pZ - ball.mesh.position.z;
                 const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-
                 if (dist < 7.7) {
                     const horizontalDist = Math.sqrt(dx*dx + dz*dz);
                     const pushDirX = horizontalDist > 0 ? dx / horizontalDist : (Math.random() - 0.5);
                     const pushDirZ = horizontalDist > 0 ? dz / horizontalDist : 1;
-                    player.knockback.set(pushDirX * 1.8, 0, pushDirZ * 1.8);
-                    player.vel.y = 0.45; 
+                    player.knockback.set(pushDirX * 1.8, 0, pushDirZ * 1.8); player.vel.y = 0.45; 
                 }
-
                 if (ball.mesh.position.z > START_POS.z + 10) { 
-                    sceneRef.current.remove(ball.mesh);
-                    ball.mesh.geometry.dispose();
-                    ball.mesh.material.dispose();
+                    sceneRef.current.remove(ball.mesh); 
+                    if(ball.mesh.geometry) ball.mesh.geometry.dispose(); 
+                    if(ball.mesh.material) ball.mesh.material.dispose(); 
                     ball.active = false;
                 }
             });
             ballsRef.current = ballsRef.current.filter(b => b.active);
 
-            let inputX = joystickRef.current.x;
-            let inputZ = joystickRef.current.y;
-            
+            let inputX = joystickRef.current.x; let inputZ = joystickRef.current.y;
             if (keysRef.current['w'] || keysRef.current['arrowup']) inputZ -= 1; 
             if (keysRef.current['s'] || keysRef.current['arrowdown']) inputZ += 1; 
             if (keysRef.current['a'] || keysRef.current['arrowleft']) inputX -= 1; 
             if (keysRef.current['d'] || keysRef.current['arrowright']) inputX += 1; 
 
-            if (inputX !== 0 || inputZ !== 0) {
-                isMoving = true;
-                const length = Math.sqrt(inputX * inputX + inputZ * inputZ);
-                const scale = length > 1 ? 1 / length : 1;
-                const dir = new THREE.Vector3(inputX * scale, 0, inputZ * scale);
-                dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.camYaw - Math.PI);
+            if (player.isLocked || player.isFlung) {
+                inputX = 0;
+                inputZ = 0;
+            }
 
-                player.vel.x += dir.x * accel;
-                player.vel.z += dir.z * accel;
+            const isInputActive = inputX !== 0 || inputZ !== 0;
+            if (!isInputActive) player.inputLockedCamYaw = null;
+
+            if (isInputActive) {
+                isMoving = true;
+                const length = Math.sqrt(inputX * inputX + inputZ * inputZ); const scale = length > 1 ? 1 / length : 1;
+                const dir = new THREE.Vector3(inputX * scale, 0, inputZ * scale);
+                const refYaw = player.inputLockedCamYaw !== null ? player.inputLockedCamYaw : player.camYaw;
+                dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), refYaw - Math.PI);
+                player.vel.x += dir.x * accel; player.vel.z += dir.z * accel;
                 player.targetRotationY = Math.atan2(player.vel.x, player.vel.z);
             }
 
             let yawDiff = player.targetRotationY - player.camYaw;
-            while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
-            while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+            while (yawDiff < -Math.PI) yawDiff += Math.PI * 2; while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
             const isRunningBackwards = Math.abs(yawDiff) > Math.PI * 0.55;
 
-            if (isMoving && isRunningBackwards) player.backwardRunTime += 16.6;
-            else player.backwardRunTime = 0; 
+            if (isMoving && isRunningBackwards) player.backwardRunTime += 16.6; else player.backwardRunTime = 0; 
 
-            let camLerpFactor = 0.03;
-            if (isRunningBackwards) {
-                if (player.backwardRunTime < 500) camLerpFactor = 0;
-                else camLerpFactor = Math.min(0.03, ((player.backwardRunTime - 500) / 1000) * 0.03);
+            if (isRunningBackwards && player.backwardRunTime >= 500 && !player.isQuickTurning) {
+                player.isQuickTurning = true;
+                if (player.inputLockedCamYaw === null) player.inputLockedCamYaw = player.camYaw;
             }
 
-            player.camYaw += yawDiff * camLerpFactor;
-            player.vel.x *= friction;
-            player.vel.z *= friction;
-
-            const currentSpeedLimit = Math.sqrt(player.vel.x * player.vel.x + player.vel.z * player.vel.z);
-            if (currentSpeedLimit > maxSpeed) {
-                player.vel.x = (player.vel.x / currentSpeedLimit) * maxSpeed;
-                player.vel.z = (player.vel.z / currentSpeedLimit) * maxSpeed;
+            if (player.isQuickTurning) {
+                const turnSpeed = 0.15; 
+                if (Math.abs(yawDiff) <= turnSpeed) { player.camYaw = player.targetRotationY; player.isQuickTurning = false; } 
+                else { player.camYaw += Math.sign(yawDiff) * turnSpeed; }
+            } else {
+                let camLerpFactor = 0.012; 
+                if (isRunningBackwards && player.backwardRunTime < 500) camLerpFactor = 0; 
+                player.camYaw += yawDiff * camLerpFactor;
             }
 
-            player.mesh.position.x += player.vel.x;
-            player.mesh.position.z += player.vel.z;
-            
-            let diff = player.targetRotationY - player.mesh.rotation.y;
-            while (diff < -Math.PI) diff += Math.PI * 2;
-            while (diff > Math.PI) diff -= Math.PI * 2;
-            player.mesh.rotation.y += diff * 0.1;
+            if (!player.isFlung) {
+                player.vel.x *= friction; player.vel.z *= friction;
+                const currentSpeedLimit = Math.sqrt(player.vel.x * player.vel.x + player.vel.z * player.vel.z);
+                if (currentSpeedLimit > maxSpeed) {
+                    player.vel.x = (player.vel.x / currentSpeedLimit) * maxSpeed; player.vel.z = (player.vel.z / currentSpeedLimit) * maxSpeed;
+                }
+            }
 
-            player.mesh.position.add(player.knockback);
-            player.knockback.multiplyScalar(0.85); 
-            player.vel.y -= gravity;
-            player.mesh.position.y += player.vel.y;
+            // === 第三关：极速水滑道强制物理覆盖 ===
+            let isSliding = false;
+            if (pZ <= -775 && currentStageRef.current === 3 && pZ > -3200 && slideObjectsRef.current && !player.hasFinishedSlide) {
+                isSliding = true;
+                isMoving = true;
+                
+                if (player.slideT === undefined || isNaN(player.slideT)) {
+                    player.slideT = 0;
+                    player.slideOffsetX = 0;
+                    player.slideVelocityX = 0; 
+                    player.slideSpeed = 0.0014; 
+                    player.isSpinning = false;
+                    player.spinTime = 0;
+                    player.isLocked = false;
+                    player.blockedUntil = 0; 
+                }
 
-            // === 碰撞检测：第一关六边形 ===
-            let closestHex = null;
-            let minHexDist = Infinity;
-            hexesRef.current.forEach(hex => {
-              if (hex.status === 'FALLING') return;
-              const dx = player.mesh.position.x - hex.mesh.position.x;
-              const dz = player.mesh.position.z - hex.mesh.position.z;
-              const dist = Math.sqrt(dx*dx + dz*dz);
-              if (dist < minHexDist) {
-                minHexDist = dist;
-                closestHex = hex;
-              }
-            });
+                if (player.slideT > 0.88) {
+                    player.isLocked = true;
+                    player.slideOffsetX *= 0.80; 
+                    player.slideVelocityX *= 0.50; 
+                    player.slideSpeed += 0.00004; 
+                }
 
-            if (closestHex && minHexDist < HEX_RADIUS * 1.15) { 
-              const floorHeight = closestHex.mesh.position.y + 1.5; 
-              if (player.mesh.position.y <= floorHeight && player.mesh.position.y >= floorHeight - 3.0 && player.vel.y <= 0) {
-                player.mesh.position.y = floorHeight; player.vel.y = 0; currentlyGrounded = true; 
-                if (closestHex.status === 'STABLE') {
-                  if (closestHex.isTrap) {
-                    closestHex.outerMat.color.setHex(0xff0000); closestHex.outerMat.emissive.setHex(0xff0000); closestHex.outerMat.emissiveIntensity = 1; closestHex.innerMat.emissive.setHex(0xff0000); closestHex.innerMat.emissiveIntensity = 0.5;
-                    const rand = Math.random();
-                    if (rand < 0.33) player.vel.y = 1.1; 
-                    else if (rand < 0.66) { player.knockback.set((Math.random() - 0.5) * 2, 0, 7); player.vel.y = 0.45; }
-                    else { player.knockback.set((Math.random() - 0.5) * 2, 0, -7); player.vel.y = 0.45; }
-                    closestHex.status = 'SHAKING'; closestHex.shakeTime = Date.now();
-                  } else if (!closestHex.isSafe) {
-                    player.vel.x *= 0.3; player.vel.z *= 0.3;
-                    closestHex.status = 'SHAKING'; closestHex.shakeTime = Date.now();
+                if (!player.isSpinning && !player.isLocked && Date.now() > player.blockedUntil) {
+                    player.slideVelocityX += inputX * 0.08; 
+                }
+
+                const slideCurve = slideObjectsRef.current.curve;
+                const tPrev = Math.max(0, player.slideT - 0.005);
+                const tNext = Math.min(1, player.slideT + 0.005);
+                const tanPrev = slideCurve.getTangentAt(tPrev);
+                const tanNext = slideCurve.getTangentAt(tNext);
+                const curveTurn = tanNext.x - tanPrev.x; 
+                
+                player.slideVelocityX -= curveTurn * 0.5; 
+                player.slideVelocityX -= player.slideOffsetX * 0.01; 
+                player.slideVelocityX *= 0.85; 
+
+                player.slideOffsetX += player.slideVelocityX;
+
+                let currentSpeed = player.slideSpeed;
+                if (Date.now() < player.boostUntil) {
+                    currentSpeed *= 1.4; 
+                }
+                if (Date.now() < player.blockedUntil) {
+                    currentSpeed *= 0.3; 
+                }
+                if (player.isSpinning) {
+                    currentSpeed *= 0.6; 
+                    player.spinTime -= 16.6;
+                    if (player.spinTime <= 0) player.isSpinning = false;
+                }
+
+                player.slideT += currentSpeed;
+
+                if (player.slideT >= 0.99) {
+                    player.slideT = undefined;
+                    player.slideVelocityX = 0;
+                    player.vel.set(0, 1.6, -3.5); 
+                    player.mesh.position.y += 2.0; 
+                    isSliding = false; 
+                    player.isFlung = true; 
+                    player.hasFinishedSlide = true; 
+                    if(player.mesh.rotation) player.mesh.rotation.set(0, Math.PI, 0); 
+                } else {
+                    const pt = slideCurve.getPointAt(player.slideT);
+                    const tangent = slideCurve.getTangentAt(player.slideT);
+                    const up = new THREE.Vector3(0, 1, 0);
+                    const binormal = new THREE.Vector3().crossVectors(tangent, up).normalize();
+                    const normal = new THREE.Vector3().crossVectors(binormal, tangent).normalize();
+
+                    const pos = pt.clone().add(binormal.clone().multiplyScalar(player.slideOffsetX));
+                    
+                    if (Math.abs(player.slideOffsetX) > 23.5 && !player.isLocked) { 
+                        player.slideT = undefined;
+                        handleFall('FALL');
+                    } else {
+                        const heightRise = Math.pow(Math.abs(player.slideOffsetX) / 22, 2.5) * 25; 
+                        pos.add(normal.clone().multiplyScalar(heightRise + 0.8)); 
+                        
+                        player.mesh.position.copy(pos);
+                        
+                        const lookPt = pt.clone().add(tangent);
+                        player.mesh.lookAt(lookPt);
+                        
+                        if (player.isSpinning) {
+                             player.mesh.rotation.y += 0.3; 
+                        }
+                    }
+                }
+
+                slideObjectsRef.current.objects.forEach(obj => {
+                    if (!obj.active) return;
+                    if (Math.abs(player.slideT - obj.t) < 0.01) {
+                        if (Math.abs(player.slideOffsetX - obj.offset) < 3.5) {
+                            if (obj.type === 'boost') {
+                                player.boostUntil = Date.now() + 1500;
+                                obj.active = false;
+                                obj.mesh.visible = false;
+                            } else if (obj.type === 'banana' || obj.type === 'roadblock') {
+                                if (player.hasShield) {
+                                    player.hasShield = false;
+                                    if (playerRef.current.shieldBubble) playerRef.current.shieldBubble.visible = false;
+                                    obj.active = false;
+                                    obj.mesh.visible = false;
+                                } else {
+                                    if (obj.type === 'banana') {
+                                        player.isSpinning = true;
+                                        player.spinTime = 800; 
+                                        obj.active = false;
+                                        obj.mesh.visible = false;
+                                    } else if (obj.type === 'roadblock') {
+                                        player.slideT = undefined;
+                                        handleFall('ROADBLOCK'); 
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // === 普通物理移动 ===
+            if (!isSliding) {
+                player.mesh.position.x += player.vel.x; 
+                player.mesh.position.z += player.vel.z;
+                
+                if (player.mesh.rotation) {
+                    let diff = player.targetRotationY - player.mesh.rotation.y;
+                    while (diff < -Math.PI) diff += Math.PI * 2; 
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+                    player.mesh.rotation.y += diff * 0.1;
+                }
+
+                player.mesh.position.add(player.knockback); 
+                player.knockback.multiplyScalar(0.85); 
+                player.vel.y -= gravity; 
+                player.mesh.position.y += player.vel.y;
+            } else {
+                player.vel.set(0, 0, 0);
+                player.knockback.set(0, 0, 0);
+            }
+
+            // === 第一/二关的碰撞检测 ===
+            if (!isSliding && !player.isFlung) {
+              let closestHex = null; let minHexDist = Infinity;
+              hexesRef.current.forEach(hex => {
+                if (hex.status === 'FALLING' || !hex.mesh || !hex.mesh.position) return;
+                const dx = player.mesh.position.x - hex.mesh.position.x; const dz = pZ - hex.mesh.position.z;
+                const dist = Math.sqrt(dx*dx + dz*dz);
+                if (dist < minHexDist) { minHexDist = dist; closestHex = hex; }
+              });
+
+              if (closestHex && minHexDist < HEX_RADIUS * 1.15 && closestHex.mesh && closestHex.mesh.position) { 
+                const floorHeight = closestHex.mesh.position.y + 1.5; 
+                if (player.mesh.position.y <= floorHeight && player.mesh.position.y >= floorHeight - 3.0 && player.vel.y <= 0) {
+                  player.mesh.position.y = floorHeight; player.vel.y = 0; currentlyGrounded = true; 
+                  if (closestHex.status === 'STABLE') {
+                    if (closestHex.isTrap) {
+                      if(closestHex.outerMat) { closestHex.outerMat.color.setHex(0xff0000); closestHex.outerMat.emissive.setHex(0xff0000); closestHex.outerMat.emissiveIntensity = 1; }
+                      if(closestHex.innerMat) { closestHex.innerMat.emissive.setHex(0xff0000); closestHex.innerMat.emissiveIntensity = 0.5; }
+                      const rand = Math.random();
+                      if (rand < 0.33) player.vel.y = 1.1; 
+                      else if (rand < 0.66) { player.knockback.set((Math.random() - 0.5) * 2, 0, 7); player.vel.y = 0.45; }
+                      else { player.knockback.set((Math.random() - 0.5) * 2, 0, -7); player.vel.y = 0.45; }
+                      closestHex.status = 'SHAKING'; closestHex.shakeTime = Date.now();
+                    } else if (!closestHex.isSafe) {
+                      player.vel.x *= 0.3; player.vel.z *= 0.3;
+                      closestHex.status = 'SHAKING'; closestHex.shakeTime = Date.now();
+                    }
                   }
                 }
               }
+
+              let isStandingOnTurntable = false; let currentTurnSpeed = 0; let turnCenterX = 0; let turnCenterZ = 0;
+              const speedMult = difficultyRef.current === 'HELL' ? 1.5 : 1.0;
+
+              turntablesRef.current.forEach(disk => {
+                  const dx = player.mesh.position.x - disk.x; const dz = pZ - disk.z;
+                  if (Math.sqrt(dx*dx + dz*dz) < disk.r) {
+                      const actualSpeed = disk.speed * speedMult; 
+                      checkObstacleCollision(player, disk.group, disk.hitboxes, disk.x, disk.z, actualSpeed);
+                      const floorHeight = 1.5; 
+                      if (player.mesh.position.y <= floorHeight && player.mesh.position.y >= floorHeight - 3.0 && player.vel.y <= 0) {
+                          player.mesh.position.y = floorHeight; player.vel.y = 0; currentlyGrounded = true;
+                          isStandingOnTurntable = true; currentTurnSpeed = actualSpeed; turnCenterX = disk.x; turnCenterZ = disk.z;
+                      }
+                  }
+              });
+
+              if (shortcutRef.current && shortcutRef.current.active) {
+                  const disk = shortcutRef.current;
+                  const dx = player.mesh.position.x - disk.x; const dz = pZ - disk.z;
+                  const dist = Math.sqrt(dx*dx + dz*dz);
+                  
+                  if (dist < disk.layers[0].r) { 
+                      let floorHeight = disk.y + 1.5; let layerSpeed = 0; let targetLayer = disk.layers[0];
+                      if (dist < disk.layers[2].r) { floorHeight += 0.2; layerSpeed = disk.layers[2].speed * speedMult; targetLayer = disk.layers[2]; }
+                      else if (dist < disk.layers[1].r) { floorHeight += 0.1; layerSpeed = disk.layers[1].speed * speedMult; targetLayer = disk.layers[1]; }
+                      else { layerSpeed = disk.layers[0].speed * speedMult; }
+
+                      checkObstacleCollision(player, targetLayer.group, targetLayer.hitboxes, disk.x, disk.z, layerSpeed);
+
+                      if (player.mesh.position.y <= floorHeight && player.mesh.position.y >= floorHeight - 3.0 && player.vel.y <= 0) {
+                          player.mesh.position.y = floorHeight; player.vel.y = 0; currentlyGrounded = true;
+                          isStandingOnTurntable = true; currentTurnSpeed = layerSpeed; turnCenterX = disk.x; turnCenterZ = disk.z;
+                      }
+                  }
+
+                  let onBridge = false;
+                  const pX = Math.abs(player.mesh.position.x); 
+                  if (pZ <= -436 && pZ >= -510 && pX < 3.0) onBridge = true; 
+                  else if (pZ <= -610 && pZ >= -665 && pX < 8.0) onBridge = true; 
+                  if (onBridge) {
+                      const floorHeight = 1.5;
+                      if (player.mesh.position.y <= floorHeight && player.mesh.position.y >= floorHeight - 3.0 && player.vel.y <= 0) {
+                          player.mesh.position.y = floorHeight; player.vel.y = 0; currentlyGrounded = true;
+                      }
+                  }
+              }
+              
+              player.onTurntable = isStandingOnTurntable;
+
+              if (isStandingOnTurntable && currentlyGrounded) {
+                  const dx = player.mesh.position.x - turnCenterX; const dz = pZ - turnCenterZ;
+                  const angle = Math.atan2(dz, dx); const dist = Math.sqrt(dx*dx + dz*dz);
+                  const newAngle = angle + currentTurnSpeed; 
+                  player.mesh.position.x = turnCenterX + dist * Math.cos(newAngle); player.mesh.position.z = turnCenterZ + Math.sin(newAngle) * dist;
+              }
             }
 
+            // 更新六边形下落
             hexesRef.current.forEach(hex => {
+              if (!hex || !hex.mesh) return;
               if (hex.status === 'SHAKING') {
                 const elapsed = Date.now() - hex.shakeTime;
-                hex.mesh.position.x = hex.origX + Math.sin(elapsed * 0.8) * 0.3; 
+                if(hex.mesh.position) hex.mesh.position.x = hex.origX + Math.sin(elapsed * 0.8) * 0.3; 
                 if (elapsed > 150) {
                   if (hex.isSafe) {
-                    hex.status = 'STABLE'; hex.isTrap = false; hex.mesh.position.x = hex.origX;
-                    if (hex.isGlowing) { hex.outerMat.color.setHex(0x34d399); hex.outerMat.emissive.setHex(0x34d399); hex.innerMat.emissive.setHex(0x34d399); } 
-                    else { hex.outerMat.color.setHex(0xffffff); hex.outerMat.emissive.setHex(0x000000); hex.innerMat.emissive.setHex(0x000000); }
+                    hex.status = 'STABLE'; hex.isTrap = false; 
+                    if(hex.mesh.position) hex.mesh.position.x = hex.origX;
+                    if (hex.isGlowing) { 
+                        if(hex.outerMat) { hex.outerMat.color.setHex(0xffe600); hex.outerMat.emissive.setHex(0xffe600); }
+                        if(hex.innerMat) hex.innerMat.emissive.setHex(0xffe600); 
+                    } else { 
+                        if(hex.outerMat) { hex.outerMat.color.setHex(0xffffff); hex.outerMat.emissive.setHex(0x000000); }
+                        if(hex.innerMat) hex.innerMat.emissive.setHex(0x000000); 
+                    }
                   } else { hex.status = 'FALLING'; }
                 }
               } else if (hex.status === 'FALLING') {
-                hex.mesh.position.y -= 1.8; hex.mesh.rotation.x += 0.15;
+                if(hex.mesh.position) hex.mesh.position.y -= 1.8; 
+                if(hex.mesh.rotation) hex.mesh.rotation.x += 0.15;
               }
             });
 
-            // === 碰撞检测：第二关转盘与滚木陷阱 ===
-            let isStandingOnTurntable = false;
-            let currentTurnSpeed = 0;
-            let turnCenterX = 0;
-            let turnCenterZ = 0;
+            // 关卡进度检测
+            if (pZ < -300 && checkpointRef.current.z > -300) {
+                checkpointRef.current = { x: 0, y: 1.5, z: -330 }; setCurrentStage(2);
+            }
+            if (pZ < -740 && checkpointRef.current.z > -740) {
+                checkpointRef.current = { x: 0, y: 1.5, z: -745 }; setCurrentStage(3);
+            }
 
-            // 1. 检测基础转盘
-            turntablesRef.current.forEach(disk => {
-                const dx = player.mesh.position.x - disk.x;
-                const dz = player.mesh.position.z - disk.z;
-                if (Math.sqrt(dx*dx + dz*dz) < disk.r) {
-                    checkObstacleCollision(player, disk.group, disk.hitboxes, disk.x, disk.z, disk.speed);
+            const pX = player.mesh.position.x;
+            const absX = Math.abs(pX);
+
+            let isOnPlatform = false;
+            if (pZ <= 65 && pZ >= 8 && absX < 50) isOnPlatform = true; 
+            else if (pZ <= -290 && pZ >= -400 && absX < 50) isOnPlatform = true; 
+            else if (pZ <= -700 && pZ >= -790 && absX < 50) isOnPlatform = true; 
+            else if (pZ <= -2600 && pZ >= -4000 && absX < 150) isOnPlatform = true; 
+
+            if (isOnPlatform && !isSliding) {
+                const floorHeight = 1.5;
+                const prevY = player.mesh.position.y - player.vel.y;
+                if (player.vel.y <= 0 && 
+                   ((prevY >= floorHeight - 1.0 && player.mesh.position.y <= floorHeight + 1.0) || 
+                    Math.abs(player.mesh.position.y - floorHeight) < 0.5)) {
                     
-                    const floorHeight = 1.5; 
-                    if (player.mesh.position.y <= floorHeight && player.mesh.position.y >= floorHeight - 3.0 && player.vel.y <= 0) {
-                        player.mesh.position.y = floorHeight; player.vel.y = 0; currentlyGrounded = true;
-                        isStandingOnTurntable = true; currentTurnSpeed = disk.speed; turnCenterX = disk.x; turnCenterZ = disk.z;
-                    }
-                }
-            });
-
-            // 2. 检测三层捷径大转盘及其独木桥
-            if (shortcutRef.current && shortcutRef.current.active) {
-                const disk = shortcutRef.current;
-                const dx = player.mesh.position.x - disk.x;
-                const dz = player.mesh.position.z - disk.z;
-                const dist = Math.sqrt(dx*dx + dz*dz);
-                
-                if (dist < disk.layers[0].r) { 
-                    let floorHeight = disk.y + 1.5; 
-                    let layerSpeed = 0;
-                    let targetLayer = disk.layers[0];
+                    player.mesh.position.y = floorHeight;
+                    player.vel.y = 0;
+                    currentlyGrounded = true;
+                    player.isFlung = false; 
+                    player.isLocked = false;
+                    player.blockedUntil = 0;
                     
-                    if (dist < disk.layers[2].r) { floorHeight += 0.1; layerSpeed = disk.layers[2].speed; targetLayer = disk.layers[2]; }
-                    else if (dist < disk.layers[1].r) { floorHeight += 0.05; layerSpeed = disk.layers[1].speed; targetLayer = disk.layers[1]; }
-                    else { layerSpeed = disk.layers[0].speed; }
-
-                    checkObstacleCollision(player, targetLayer.group, targetLayer.hitboxes, disk.x, disk.z, layerSpeed);
-
-                    if (player.mesh.position.y <= floorHeight && player.mesh.position.y >= floorHeight - 3.0 && player.vel.y <= 0) {
-                        player.mesh.position.y = floorHeight; player.vel.y = 0; currentlyGrounded = true;
-                        isStandingOnTurntable = true; currentTurnSpeed = layerSpeed; turnCenterX = disk.x; turnCenterZ = disk.z;
+                    if (pZ < -2800 && gameStateRef.current !== 'WIN') {
+                        setGameState('WIN');
+                        checkpointRef.current = { x: 0, y: 1.5, z: -2900 }; 
+                        const timeTaken = ((Date.now() - startTimeRef.current) / 1000).toFixed(2);
+                        setFinalTime(timeTaken);
                     }
                 }
-
-                // 独木桥的碰撞检测
-                let onBridge = false;
-                const pX = Math.abs(player.mesh.position.x);
-                const pZ = player.mesh.position.z;
-                
-                if (pZ <= -436 && pZ >= -510 && pX < 3.0) {
-                    onBridge = true; // 窄桥
-                } else if (pZ <= -610 && pZ >= -665 && pX < 8.0) {
-                    onBridge = true; // 宽桥
-                }
-
-                if (onBridge) {
-                    const floorHeight = 1.5;
-                    if (player.mesh.position.y <= floorHeight && player.mesh.position.y >= floorHeight - 3.0 && player.vel.y <= 0) {
-                        player.mesh.position.y = floorHeight; player.vel.y = 0; currentlyGrounded = true;
-                    }
-                }
-            }
-            
-            player.onTurntable = isStandingOnTurntable;
-
-            if (isStandingOnTurntable && currentlyGrounded) {
-                const dx = player.mesh.position.x - turnCenterX;
-                const dz = player.mesh.position.z - turnCenterZ;
-                const angle = Math.atan2(dz, dx);
-                const dist = Math.sqrt(dx*dx + dz*dz);
-                const newAngle = angle + currentTurnSpeed; 
-                player.mesh.position.x = turnCenterX + dist * Math.cos(newAngle);
-                player.mesh.position.z = turnCenterZ + Math.sin(newAngle) * dist;
-            }
-
-            // === 关卡进度与安全区 ===
-            if (player.mesh.position.z < -350 && checkpointRef.current.z > -350) {
-                checkpointRef.current = { x: 0, y: 1.5, z: -335 };
-                setCurrentStage(2);
-            }
-
-            if (player.mesh.position.z > 8.5) {
-              if (player.mesh.position.y <= 1.5 && player.mesh.position.y >= 0.5 && player.vel.y <= 0) {
-                player.mesh.position.y = 1.5; player.vel.y = 0; currentlyGrounded = true;
-              }
-            }
-            if (player.mesh.position.z <= -290.0 && player.mesh.position.z >= -385.0) {
-              if (player.mesh.position.y <= 1.5 && player.mesh.position.y >= 0.5 && player.vel.y <= 0) {
-                player.mesh.position.y = 1.5; player.vel.y = 0; currentlyGrounded = true;
-              }
-            }
-            if (player.mesh.position.z < STAGE2_WIN_Z) {
-              if (player.mesh.position.y <= 1.5 && player.mesh.position.y >= 0.5 && player.vel.y <= 0) {
-                player.mesh.position.y = 1.5; player.vel.y = 0; currentlyGrounded = true;
-                setGameState('WIN');
-              }
             }
 
             if (!player.wasOnGround && currentlyGrounded) player.jumpCooldownUntil = Date.now() + 180;
             player.wasOnGround = currentlyGrounded; player.onGround = currentlyGrounded;
 
-            if (keysRef.current[' '] && player.onGround && Math.abs(player.vel.y) < 0.01 && Date.now() >= player.jumpCooldownUntil) {
+            if (keysRef.current[' '] && player.onGround && Math.abs(player.vel.y) < 0.01 && Date.now() >= player.jumpCooldownUntil && !isSliding) {
               player.vel.y = jumpForce; player.onGround = false;
             }
 
-            // 专属阿噗的动作微调
-            if (isMoving && player.onGround) {
-              const animTime = Date.now() * 0.018;
-              player.limbs.armL.rotation.x = Math.sin(animTime) * 0.5; player.limbs.armR.rotation.x = -Math.sin(animTime) * 0.5;
-              player.limbs.legL.rotation.x = -Math.sin(animTime) * 0.6; player.limbs.legR.rotation.x = Math.sin(animTime) * 0.6;
-            } else if (!player.onGround) {
-              player.limbs.armL.rotation.x = Math.PI / 3; player.limbs.armR.rotation.x = Math.PI / 3; 
-              player.limbs.legL.rotation.x = -Math.PI / 6; player.limbs.legR.rotation.x = 0;
-            } else {
-              player.limbs.armL.rotation.x = 0; player.limbs.armR.rotation.x = 0;
-              player.limbs.legL.rotation.x = 0; player.limbs.legR.rotation.x = 0;
+            // 【肢体动画更新】
+            if (player.limbs) {
+                const bGroup = player.limbs.bodyGroup;
+                const aL = player.limbs.armL;
+                const aR = player.limbs.armR;
+                const lL = player.limbs.legL;
+                const lR = player.limbs.legR;
+                const apuModel = player.limbs.apuModel;
+
+                let targetApuRotX = 0;
+
+                if (isSliding && !player.isSpinning) {
+                    targetApuRotX = Math.PI / 2.2; 
+                    if (bGroup) bGroup.rotation.x = 0; 
+                    if (lL) lL.rotation.x = 0; 
+                    if (lR) lR.rotation.x = 0;
+                    if (aL) { aL.rotation.x = Math.PI; aL.rotation.z = 0; } 
+                    if (aR) { aR.rotation.x = Math.PI; aR.rotation.z = 0; }
+                } else if (isSliding && player.isSpinning) {
+                    targetApuRotX = 0;
+                    if (bGroup) bGroup.rotation.x = 0; 
+                    if (aL) { aL.rotation.x = Math.PI; aL.rotation.z = Math.PI/2; }
+                    if (aR) { aR.rotation.x = Math.PI; aR.rotation.z = -Math.PI/2; }
+                    if (lL) lL.rotation.x = -Math.PI/4; if (lR) lR.rotation.x = -Math.PI/4;
+                } else if (player.isFlung) {
+                    targetApuRotX = 0;
+                    if (bGroup) bGroup.rotation.x = Math.PI / 8; 
+                    if (aL) { aL.rotation.x = Math.PI; aL.rotation.z = Math.PI / 6; }
+                    if (aR) { aR.rotation.x = Math.PI; aR.rotation.z = -Math.PI / 6; }
+                    if (lL) lL.rotation.x = -Math.PI / 6; if (lR) lR.rotation.x = -Math.PI / 6;
+                } else {
+                    targetApuRotX = 0;
+                    if (bGroup) {
+                        const targetTilt = (isMoving && player.onGround) ? 0.25 : 0;
+                        bGroup.rotation.x += (targetTilt - bGroup.rotation.x) * 0.15;
+                    }
+
+                    if (isMoving && player.onGround) {
+                      const animTime = Date.now() * 0.015;
+                      if (bGroup && bGroup.position) bGroup.position.y = Math.abs(Math.sin(animTime * 2.4)) * 0.08;
+
+                      if (aL) { aL.rotation.x = Math.sin(animTime * 1.2) * 0.8; aL.rotation.z = 0; }
+                      if (aR) { aR.rotation.x = -Math.sin(animTime * 1.2) * 0.8; aR.rotation.z = 0; }
+                      if (lL) lL.rotation.x = -Math.sin(animTime * 1.2) * 0.6;
+                      if (lR) lR.rotation.x = Math.sin(animTime * 1.2) * 0.6;
+                    } else if (!player.onGround) {
+                      if (bGroup && bGroup.position) bGroup.position.y = 0;
+                      if (aL) { aL.rotation.x = Math.PI / 3; aL.rotation.z = 0; }
+                      if (aR) { aR.rotation.x = Math.PI / 3; aR.rotation.z = 0; }
+                      if (lL) lL.rotation.x = -Math.PI / 6;
+                      if (lR) lR.rotation.x = 0;
+                    } else {
+                      if (bGroup && bGroup.position) bGroup.position.y = 0;
+                      if (aL) { aL.rotation.x = 0; aL.rotation.z = 0; }
+                      if (aR) { aR.rotation.x = 0; aR.rotation.z = 0; }
+                      if (lL) lL.rotation.x = 0;
+                      if (lR) lR.rotation.x = 0;
+                    }
+                }
+                
+                if (apuModel) {
+                    apuModel.rotation.x += (targetApuRotX - apuModel.rotation.x) * 0.15;
+                }
             }
 
-            if (!quiz1TriggeredRef.current && player.mesh.position.z < QUIZ1_TRIGGER_Z && currentStageRef.current === 1) {
+            if (!quiz1TriggeredRef.current && pZ < QUIZ1_TRIGGER_Z && currentStageRef.current === 1) {
               quiz1TriggeredRef.current = true; setQuizType('QUIZ_1'); setGameState('QUIZ'); setTimer(10); return; 
             }
-
-            if (!quiz2TriggeredRef.current && player.mesh.position.z < QUIZ2_TRIGGER_Z && currentStageRef.current === 2) {
+            if (!quiz2TriggeredRef.current && pZ < QUIZ2_TRIGGER_Z && currentStageRef.current === 2) {
               quiz2TriggeredRef.current = true; setQuizType('QUIZ_2'); setGameState('QUIZ'); setTimer(10); return; 
             }
+            if (!quiz3TriggeredRef.current && pZ < QUIZ3_TRIGGER_Z && currentStageRef.current === 3) {
+              quiz3TriggeredRef.current = true; setQuizType('QUIZ_3'); setGameState('QUIZ'); setTimer(10); return; 
+            }
 
-            if (player.mesh.position.y < FALL_Y_THRESHOLD) handleFall();
+            if (!isSliding) {
+                if (!player.isFlung && player.mesh.position.y < FALL_Y_THRESHOLD) {
+                    handleFall('FALL');
+                } else if (player.isFlung && player.mesh.position.y < -200) {
+                    handleFall('FALL'); 
+                }
+            }
           };
 
           useEffect(() => {
@@ -1148,82 +1730,156 @@
           const handleQuizAnswer = (ans) => {
             let isCorrect = false;
             if (quizType === 'QUIZ_1') {
-                isCorrect = ans === 'C';
-                setQuizResult(isCorrect ? 'CORRECT' : 'WRONG');
+                isCorrect = ans === 'C'; setQuizResult(isCorrect ? 'CORRECT' : 'WRONG');
                 if (isCorrect) {
                     quiz1PassedRef.current = true;
                     if (hexesRef.current.length > 0) {
                         hexesRef.current.forEach(hex => {
-                            if (hex.isSafe) { hex.outerMat.color.setHex(0x34d399); hex.outerMat.emissive.setHex(0x34d399); hex.innerMat.emissive.setHex(0x34d399); hex.isGlowing = true; }
+                            if (hex.isSafe) { 
+                                if(hex.outerMat) { hex.outerMat.color.setHex(0xffe600); hex.outerMat.emissive.setHex(0xffe600); }
+                                if(hex.innerMat) hex.innerMat.emissive.setHex(0xffe600); 
+                                hex.isGlowing = true; 
+                            }
                         });
                     }
                 }
             } else if (quizType === 'QUIZ_2') {
-                isCorrect = ans === 'A';
-                setQuizResult(isCorrect ? 'CORRECT' : 'WRONG');
+                isCorrect = ans === 'A'; setQuizResult(isCorrect ? 'CORRECT' : 'WRONG');
                 if (isCorrect) {
                     quiz2PassedRef.current = true;
                     if (shortcutRef.current) {
-                        shortcutRef.current.active = true;
-                        shortcutRef.current.mainGroup.visible = true;
-                        shortcutRef.current.bridgesGroup.visible = true;
-                        shortcutRef.current.mainGroup.position.y = -50;
-                        shortcutRef.current.bridgesGroup.position.y = -50;
+                        shortcutRef.current.active = true; 
+                        if(shortcutRef.current.mainGroup) { shortcutRef.current.mainGroup.visible = true; shortcutRef.current.mainGroup.position.y = -50; }
+                        if(shortcutRef.current.bridgesGroup) { shortcutRef.current.bridgesGroup.visible = true; shortcutRef.current.bridgesGroup.position.y = -50; }
+                        
                         const elevateShortcut = () => {
-                            if(shortcutRef.current.mainGroup.position.y < 0) {
-                                shortcutRef.current.mainGroup.position.y += 2;
-                                shortcutRef.current.bridgesGroup.position.y += 2;
+                            if(shortcutRef.current.mainGroup && shortcutRef.current.mainGroup.position.y < 0) {
+                                shortcutRef.current.mainGroup.position.y += 2; 
+                                if(shortcutRef.current.bridgesGroup) shortcutRef.current.bridgesGroup.position.y += 2;
                                 requestAnimationFrame(elevateShortcut);
                             } else {
-                                shortcutRef.current.mainGroup.position.y = 0;
-                                shortcutRef.current.bridgesGroup.position.y = 0;
+                                if(shortcutRef.current.mainGroup) shortcutRef.current.mainGroup.position.y = 0; 
+                                if(shortcutRef.current.bridgesGroup) shortcutRef.current.bridgesGroup.position.y = 0;
                             }
                         }
                         elevateShortcut();
                     }
                 }
+            } else if (quizType === 'QUIZ_3') {
+                isCorrect = ans === 'B'; setQuizResult(isCorrect ? 'CORRECT' : 'WRONG');
+                if (isCorrect) {
+                    quiz3PassedRef.current = true;
+                    if (playerRef.current && playerRef.current.shieldBubble) {
+                        playerRef.current.hasShield = true;
+                        playerRef.current.shieldBubble.visible = true; 
+                    }
+                }
             }
             
             setQuizFeedback(isCorrect ? 'CORRECT' : 'WRONG');
-            setTimeout(() => {
-                setQuizFeedback(null);
-                setGameState('PLAYING_RESUME');
-            }, 1200);
+            setTimeout(() => { setQuizFeedback(null); setGameState('PLAYING_RESUME'); }, 1200);
           };
 
-          const handleFall = () => {
+          const handleFall = (reason = 'FALL') => {
             if (gameStateRef.current === 'FALLEN') return; 
+            setFallReason(reason);
             gameStateRef.current = 'FALLEN'; setGameState('FALLEN');
+
+            if (playerRef.current && playerRef.current.limbs) {
+                const limbs = playerRef.current.limbs;
+                if (limbs.apuModel) limbs.apuModel.rotation.set(0, 0, 0);
+                if (limbs.bodyGroup) {
+                    limbs.bodyGroup.rotation.set(0, 0, 0);
+                    limbs.bodyGroup.position.y = 0;
+                }
+                if (limbs.armL) { limbs.armL.rotation.set(0, 0, 0); }
+                if (limbs.armR) { limbs.armR.rotation.set(0, 0, 0); }
+                if (limbs.legL) limbs.legL.rotation.set(0, 0, 0);
+                if (limbs.legR) limbs.legR.rotation.set(0, 0, 0);
+            }
+
             setTimeout(() => {
               if (playerRef.current && playerRef.current.mesh) {
                 const cp = checkpointRef.current;
-                playerRef.current.mesh.position.set(cp.x, cp.y, cp.z);
-                playerRef.current.vel.set(0, 0, 0); playerRef.current.knockback.set(0, 0, 0);
-                playerRef.current.mesh.rotation.y = Math.PI; playerRef.current.targetRotationY = Math.PI; playerRef.current.camYaw = Math.PI; 
-                playerRef.current.jumpCooldownUntil = 0; playerRef.current.backwardRunTime = 0; 
+                if(playerRef.current.mesh.position) playerRef.current.mesh.position.set(cp.x, cp.y, cp.z);
+                if(playerRef.current.vel) playerRef.current.vel.set(0, 0, 0); 
+                if(playerRef.current.knockback) playerRef.current.knockback.set(0, 0, 0);
+                
+                if(playerRef.current.mesh.rotation) playerRef.current.mesh.rotation.set(0, Math.PI, 0); 
+                if(playerRef.current.limbs && playerRef.current.limbs.apuModel) playerRef.current.limbs.apuModel.rotation.set(0, 0, 0);
+                if(playerRef.current.limbs && playerRef.current.limbs.bodyGroup) playerRef.current.limbs.bodyGroup.rotation.set(0, 0, 0);
+
+                playerRef.current.targetRotationY = Math.PI; 
+                playerRef.current.camYaw = Math.PI; 
+                playerRef.current.jumpCooldownUntil = 0; 
+                playerRef.current.backwardRunTime = 0; 
+                playerRef.current.isQuickTurning = false; 
+                playerRef.current.inputLockedCamYaw = null;
+                
+                playerRef.current.boostUntil = 0;
+                playerRef.current.isLocked = false;
+                playerRef.current.isFlung = false;
+                
+                if (checkpointRef.current.z <= -2800) {
+                    playerRef.current.hasFinishedSlide = true; 
+                } else {
+                    playerRef.current.hasFinishedSlide = false; 
+                }
+                
+                playerRef.current.blockedUntil = 0;
+                playerRef.current.slideT = undefined; 
+                playerRef.current.slideOffsetX = 0;
+                playerRef.current.slideVelocityX = 0;
+                playerRef.current.isSpinning = false;
+                playerRef.current.spinTime = 0;
               }
               if (cameraRef.current && window.THREE) {
                 const cp = checkpointRef.current; const resetRotY = Math.PI;
-                cameraRef.current.position.set(cp.x - Math.sin(resetRotY) * 12, cp.y + 7, cp.z - Math.cos(resetRotY) * 12);
+                if(cameraRef.current.position) cameraRef.current.position.set(cp.x - Math.sin(resetRotY) * 12, cp.y + 7, cp.z - Math.cos(resetRotY) * 12);
                 const resetLookAt = new window.THREE.Vector3(cp.x + Math.sin(resetRotY) * 10, cp.y + 1.0, cp.z + Math.cos(resetRotY) * 10);
-                cameraRef.current.lookAtTarget = resetLookAt; cameraRef.current.lookAt(resetLookAt);
+                cameraRef.current.lookAtTarget = resetLookAt; 
+                if(typeof cameraRef.current.lookAt === 'function') cameraRef.current.lookAt(resetLookAt);
+                if (cameraRef.current.fov) { cameraRef.current.fov = 50; cameraRef.current.updateProjectionMatrix(); }
               }
               
               if (!quiz1PassedRef.current) quiz1TriggeredRef.current = false;
               if (!quiz2PassedRef.current) quiz2TriggeredRef.current = false;
+              if (!quiz3PassedRef.current) {
+                  quiz3TriggeredRef.current = false;
+                  if (playerRef.current) {
+                      playerRef.current.hasShield = false;
+                      if(playerRef.current.shieldBubble) playerRef.current.shieldBubble.visible = false;
+                  }
+              }
+
+              if (slideObjectsRef.current && slideObjectsRef.current.objects) {
+                  slideObjectsRef.current.objects.forEach(obj => {
+                      obj.active = true;
+                      if(obj.mesh) obj.mesh.visible = true;
+                  });
+              }
 
               hexesRef.current.forEach(hex => {
-                hex.status = 'STABLE'; hex.shakeTime = 0; hex.mesh.position.y = 0; hex.mesh.rotation.x = 0; hex.mesh.position.x = hex.origX;
+                if (!hex) return; 
+                hex.status = 'STABLE'; hex.shakeTime = 0; 
+                if(hex.mesh && hex.mesh.position) { hex.mesh.position.y = 0; hex.mesh.position.x = hex.origX; }
+                if(hex.mesh && hex.mesh.rotation) hex.mesh.rotation.x = 0;
+                
                 if (currentStageRef.current === 1 && quizResultRef.current === 'CORRECT' && hex.isSafe) {
-                  hex.isGlowing = true; hex.outerMat.color.setHex(0x34d399); hex.outerMat.emissive.setHex(0x34d399); hex.innerMat.emissive.setHex(0x34d399); 
+                  hex.isGlowing = true; 
+                  if(hex.outerMat) { hex.outerMat.color.setHex(0xffe600); hex.outerMat.emissive.setHex(0xffe600); }
+                  if(hex.innerMat) hex.innerMat.emissive.setHex(0xffe600); 
                 } else if (hex.isGlowing || hex.isTrap) {
-                  hex.isGlowing = false; hex.outerMat.color.setHex(0xffffff); hex.outerMat.emissive.setHex(0x000000); hex.outerMat.emissiveIntensity = 0; hex.innerMat.emissive.setHex(0x000000); hex.innerMat.emissiveIntensity = 0;
+                  hex.isGlowing = false; 
+                  if(hex.outerMat) { hex.outerMat.color.setHex(0xffffff); hex.outerMat.emissive.setHex(0x000000); hex.outerMat.emissiveIntensity = 0; }
+                  if(hex.innerMat) { hex.innerMat.emissive.setHex(0x000000); hex.innerMat.emissiveIntensity = 0; }
                 }
               });
+              
               ballsRef.current.forEach(ball => { 
-                  if (sceneRef.current) sceneRef.current.remove(ball.mesh); 
-                  ball.mesh.geometry.dispose();
-                  ball.mesh.material.dispose();
+                  if (sceneRef.current && ball && ball.mesh) sceneRef.current.remove(ball.mesh); 
+                  if(ball && ball.mesh && ball.mesh.geometry) ball.mesh.geometry.dispose(); 
+                  if(ball && ball.mesh && ball.mesh.material) ball.mesh.material.dispose();
               }); 
               ballsRef.current = [];
               setGameState('PLAYING');
@@ -1233,14 +1889,19 @@
           useEffect(() => {
             let interval;
             if (gameState === 'START_COUNTDOWN') {
-              if (countdown > 0) interval = setTimeout(() => setCountdown(c => c - 1), 1000); else setGameState('PLAYING');
+              if (countdown > 0) {
+                  interval = setTimeout(() => setCountdown(c => c - 1), 1000); 
+              } else {
+                  setGameState('PLAYING');
+                  startTimeRef.current = Date.now();
+              }
             } else if (gameState === 'QUIZ' && !quizFeedback) { 
               if (timer > 0) interval = setTimeout(() => setTimer(t => t - 1), 1000); else handleQuizAnswer('TIMEOUT');
             }
             return () => clearTimeout(interval);
           }, [gameState, countdown, timer, quizFeedback]);
 
-          const showMobileControls = (gameState === 'PLAYING' || gameState === 'PLAYING_RESUME' || gameState === 'QUIZ');
+          const showMobileControls = (gameState === 'PLAYING' || gameState === 'PLAYING_RESUME' || gameState === 'QUIZ' || gameState === 'WIN');
 
           return (
             <div className="flex flex-col items-center justify-center min-h-screen font-sans text-slate-800 overflow-hidden md:p-4">
@@ -1248,7 +1909,7 @@
                 
                 <div ref={mountRef} className="absolute inset-0 z-0" />
 
-                {showMobileControls && (
+                {showMobileControls && gameState !== 'WIN' && (
                   <>
                     <div id="joystick-zone" ref={joystickBaseRef} onTouchStart={handleTouchMove} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchEnd} className="absolute bottom-8 left-8 w-36 h-36 bg-white/20 backdrop-blur-md rounded-full border-[3px] border-white/40 shadow-[inset_0_0_20px_rgba(255,255,255,0.2)] flex items-center justify-center z-50 md:hidden touch-none">
                       <div className="w-14 h-14 bg-white/90 rounded-full shadow-[0_5px_15px_rgba(0,0,0,0.2)] pointer-events-none transition-transform duration-75" style={{ transform: `translate(${joystickPos.x}px, ${joystickPos.y}px)` }} />
@@ -1262,31 +1923,62 @@
                 {gameState === 'LOADING' && (
                   <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-sky-500 text-white">
                      <Loader2 className="w-20 h-20 animate-spin text-white mb-6 drop-shadow-md" />
-                     <p className="text-3xl font-black tracking-widest animate-pulse drop-shadow-md">构建阿噗的世界...</p>
+                     <p className="text-3xl font-black tracking-widest animate-pulse drop-shadow-md">构建梦幻游乐园...</p>
                   </div>
                 )}
 
                 {gameState === 'READY' && (
-                  <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-sky-900/40 backdrop-blur-sm p-8 text-center transition-opacity duration-500">
-                    <h1 className="text-6xl md:text-7xl font-black mb-6 italic tracking-tighter text-white drop-shadow-[0_8px_0_#0284c7]">阿噗向前冲!</h1>
+                  <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-sky-900/40 backdrop-blur-sm p-4 md:p-8 text-center transition-opacity duration-500">
+                    <h1 className="text-5xl md:text-7xl font-black mb-6 italic tracking-tighter text-white drop-shadow-[0_8px_0_#0284c7]">阿噗向前冲!</h1>
                     
-                    <div className="bg-white/20 backdrop-blur-md p-6 rounded-3xl border-2 border-white/40 mb-10">
-                        <p className="text-white font-bold tracking-widest mb-4">选择你喜欢的阿噗造型</p>
-                        <div className="flex gap-4 justify-center">
-                            {SKINS.map(skin => (
-                                <button 
-                                    key={skin.id}
-                                    onClick={() => setActiveSkin(skin)}
-                                    className={`w-14 h-14 rounded-full border-4 transition-all duration-300 ${activeSkin.id === skin.id ? 'border-white scale-125 shadow-[0_0_15px_rgba(255,255,255,0.8)]' : 'border-white/40 hover:scale-110 opacity-80'}`}
-                                    style={{ backgroundColor: skin.hex }}
-                                    title={skin.name}
-                                />
-                            ))}
+                    <div className="flex flex-col md:flex-row gap-4 md:gap-6 mb-8 w-full max-w-2xl justify-center items-stretch">
+                        <div className="bg-white/20 backdrop-blur-md p-4 md:p-6 rounded-3xl border-2 border-white/40 flex-1 flex flex-col justify-between shadow-xl">
+                            <p className="text-white font-bold tracking-widest mb-3 md:mb-4 drop-shadow-md">选择游戏难度</p>
+                            <div className="flex gap-2 justify-center flex-wrap mb-3 md:mb-0">
+                                {[
+                                    { id: 'EASY', name: '简单' },
+                                    { id: 'NORMAL', name: '普通' },
+                                    { id: 'HELL', name: '地狱' }
+                                ].map(diff => (
+                                    <button 
+                                        key={diff.id}
+                                        onClick={() => handleDifficultyChange(diff.id)}
+                                        className={`px-3 py-1.5 md:px-4 md:py-2 rounded-xl border-2 font-black transition-all duration-300 text-sm md:text-base ${difficulty === diff.id ? 'border-white bg-white/30 scale-110 shadow-[0_0_15px_rgba(255,255,255,0.5)] text-white' : 'border-white/40 hover:scale-105 opacity-80 text-sky-100'}`}
+                                    >
+                                        {diff.name}
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-sky-100 text-xs md:text-sm mt-3 h-8 md:h-10 flex items-center justify-center drop-shadow-md font-bold">
+                                {[
+                                    { id: 'EASY', desc: '适合新手：无陷阱，安全区占比 25%' },
+                                    { id: 'NORMAL', desc: '标准挑战：陷阱 10%，安全区占比 20%' },
+                                    { id: 'HELL', desc: '受苦之旅：陷阱 20%，安全区 18% (多滚石+极速盘)' }
+                                ].find(d => d.id === difficulty).desc}
+                            </p>
+                        </div>
+
+                        <div className="bg-white/20 backdrop-blur-md p-4 md:p-6 rounded-3xl border-2 border-white/40 flex-1 flex flex-col justify-between shadow-xl">
+                            <p className="text-white font-bold tracking-widest mb-3 md:mb-4 drop-shadow-md">选择阿噗造型</p>
+                            <div className="flex gap-3 justify-center mb-3 md:mb-0">
+                                {SKINS.map(skin => (
+                                    <button 
+                                        key={skin.id}
+                                        onClick={() => setActiveSkin(skin)}
+                                        className={`w-10 h-10 md:w-14 md:h-14 rounded-full border-4 transition-all duration-300 ${activeSkin.id === skin.id ? 'border-white scale-125 shadow-[0_0_15px_rgba(255,255,255,0.8)]' : 'border-white/40 hover:scale-110 opacity-80'}`}
+                                        style={{ backgroundColor: skin.hex }}
+                                        title={skin.name}
+                                    />
+                                ))}
+                            </div>
+                            <p className="text-sky-100 text-xs md:text-sm mt-3 h-8 md:h-10 flex items-center justify-center font-bold drop-shadow-md">
+                                当前皮肤: {activeSkin.name}
+                            </p>
                         </div>
                     </div>
 
-                    <button onClick={startGame} className="px-12 md:px-16 py-5 md:py-6 bg-pink-400 text-white font-black text-3xl md:text-4xl rounded-full hover:bg-pink-500 active:scale-95 shadow-[0_8px_0_#be185d] flex justify-center items-center gap-4 transition-all hover:scale-105">
-                      <Play className="fill-current w-8 h-8 md:w-10 md:h-10" /> 开始游戏
+                    <button onClick={startGame} className="px-10 md:px-16 py-4 md:py-6 bg-pink-400 text-white font-black text-2xl md:text-4xl rounded-full hover:bg-pink-500 active:scale-95 shadow-[0_8px_0_#be185d] flex justify-center items-center gap-4 transition-all hover:scale-105 border-4 border-pink-300">
+                      <Play className="fill-current w-6 h-6 md:w-10 md:h-10" /> 闯入游乐园
                     </button>
                   </div>
                 )}
@@ -1304,7 +1996,10 @@
                     <div className="bg-white/90 border-4 border-sky-200 rounded-full px-8 py-3 flex items-center gap-3 shadow-xl">
                        <Trophy className="text-yellow-500 w-6 h-6" />
                        <span className="font-black tracking-widest uppercase italic text-sky-800 text-base md:text-lg">
-                         第 {currentStage} 关：{currentStage === 1 ? "深渊迷阵" : "眩晕转盘"}
+                         第 {currentStage} 关：
+                         {currentStage === 1 && "深渊迷阵"}
+                         {currentStage === 2 && "眩晕转盘"}
+                         {currentStage === 3 && "极速水滑道"}
                        </span>
                     </div>
                   </div>
@@ -1312,7 +2007,6 @@
 
                 {gameState === 'QUIZ' && (
                   <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-sky-900/60 backdrop-blur-md p-4 animate-in fade-in zoom-in duration-300">
-                    
                     {quizFeedback ? (
                         <div className="flex flex-col items-center animate-bounce">
                             {quizFeedback === 'CORRECT' ? (
@@ -1320,7 +2014,9 @@
                                     <CheckCircle className="text-green-400 w-24 h-24 mb-6 drop-shadow-lg" />
                                     <span className="font-black text-green-400 text-5xl tracking-widest drop-shadow-lg mb-4">回答正确!</span>
                                     <span className="font-bold text-white text-2xl drop-shadow-md bg-green-500/40 px-6 py-2 rounded-full backdrop-blur-sm">
-                                        {quizType === 'QUIZ_1' ? '恭喜！朝着提示路线前进吧！' : '恭喜您，捷径大转盘为您升起。'}
+                                        {quizType === 'QUIZ_1' && '恭喜！朝着提示路线前进吧！'}
+                                        {quizType === 'QUIZ_2' && '恭喜您，捷径大转盘为您升起。'}
+                                        {quizType === 'QUIZ_3' && '恭喜！获得【婵娟防护罩】，滑道冲刺吧！'}
                                     </span>
                                 </>
                             ) : (
@@ -1328,7 +2024,9 @@
                                     <XCircle className="text-red-400 w-24 h-24 mb-6 drop-shadow-lg" />
                                     <span className="font-black text-red-400 text-5xl tracking-widest drop-shadow-lg mb-4">回答错误!</span>
                                     <span className="font-bold text-white text-2xl drop-shadow-md bg-red-500/40 px-6 py-2 rounded-full backdrop-blur-sm">
-                                        {quizType === 'QUIZ_1' ? '很遗憾，您未能获得提示。' : '很遗憾，您未能解锁捷径。'}
+                                        {quizType === 'QUIZ_1' && '很遗憾，您未能获得提示。'}
+                                        {quizType === 'QUIZ_2' && '很遗憾，您未能解锁捷径。'}
+                                        {quizType === 'QUIZ_3' && '缺少防护罩，请小心躲避滑道上的障碍物！'}
                                     </span>
                                 </>
                             )}
@@ -1345,10 +2043,12 @@
                               </div>
                               
                               <p className="text-sky-600 font-black text-lg mb-6 border-l-4 border-sky-400 pl-3">
-                                  {quizType === 'QUIZ_1' ? '🎁 答对题目将获得正确路径提示' : '🎁 答对题目将获得通关捷径'}
+                                  {quizType === 'QUIZ_1' && '🎁 答对题目将获得正确路径提示'}
+                                  {quizType === 'QUIZ_2' && '🎁 答对题目将获得通关捷径'}
+                                  {quizType === 'QUIZ_3' && '🎁 答对题目将获得一次性防护罩'}
                               </p>
                               
-                              {quizType === 'QUIZ_1' ? (
+                              {quizType === 'QUIZ_1' && (
                                   <>
                                     <h2 className="text-2xl md:text-3xl font-black mb-10 text-slate-800 leading-tight">苏轼的字是（&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;）</h2>
                                     <div className="grid gap-4">
@@ -1359,11 +2059,26 @@
                                       ))}
                                     </div>
                                   </>
-                              ) : (
+                              )}
+                              
+                              {quizType === 'QUIZ_2' && (
                                   <>
                                     <h2 className="text-2xl md:text-3xl font-black mb-10 text-slate-800 leading-tight">"莫听穿林打叶声"的下一句是（&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;）？</h2>
                                     <div className="grid gap-4">
                                       {['A. 何妨吟啸且徐行', 'B. 此处无声胜有声', 'C. 多少楼台烟雨中'].map((opt) => (
+                                        <button key={opt} onClick={() => handleQuizAnswer(opt[0])} className="w-full p-5 md:p-6 bg-sky-50 hover:bg-sky-500 hover:text-white rounded-2xl font-black text-xl text-left transition-colors flex justify-between items-center group border-4 border-sky-100 shadow-sm">
+                                          {opt} <ChevronRight className="opacity-0 group-hover:opacity-100 transition-opacity" size={28} />
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </>
+                              )}
+
+                              {quizType === 'QUIZ_3' && (
+                                  <>
+                                    <h2 className="text-2xl md:text-3xl font-black mb-10 text-slate-800 leading-tight">"但愿人长久，千里共婵娟"中的"婵娟"意思是？</h2>
+                                    <div className="grid gap-4">
+                                      {['A. 嫦娥', 'B. 月亮', 'C. 诗词'].map((opt) => (
                                         <button key={opt} onClick={() => handleQuizAnswer(opt[0])} className="w-full p-5 md:p-6 bg-sky-50 hover:bg-sky-500 hover:text-white rounded-2xl font-black text-xl text-left transition-colors flex justify-between items-center group border-4 border-sky-100 shadow-sm">
                                           {opt} <ChevronRight className="opacity-0 group-hover:opacity-100 transition-opacity" size={28} />
                                         </button>
@@ -1378,19 +2093,38 @@
                 )}
 
                 {gameState === 'FALLEN' && (
-                  <div className="absolute inset-0 z-40 bg-pink-500/30 flex items-center justify-center">
-                     <div className="bg-white border-8 border-pink-400 px-8 md:px-12 py-5 md:py-6 rounded-[3rem] text-pink-500 font-black text-4xl md:text-5xl italic tracking-tighter shadow-2xl transform rotate-2 animate-bounce">
-                        淘汰! 回到最近安全区!
+                  <div className={`absolute inset-0 z-40 bg-pink-500/30 flex items-center justify-center ${fallReason === 'ROADBLOCK' ? 'crash-shake' : ''}`}>
+                     <div className={`bg-white border-8 px-8 md:px-12 py-5 md:py-6 rounded-[3rem] font-black text-4xl md:text-5xl italic tracking-tighter shadow-2xl transform rotate-2 animate-bounce ${fallReason === 'ROADBLOCK' ? 'border-red-500 text-red-500 scale-110' : 'border-pink-400 text-pink-500'}`}>
+                        {fallReason === 'ROADBLOCK' ? '💥 撞到路障啦! 淘汰!' : '掉下深渊啦! 重新出发!'}
                      </div>
                   </div>
                 )}
 
                 {gameState === 'WIN' && (
-                  <div className="absolute inset-0 z-50 bg-green-400 flex flex-col items-center justify-center p-8 text-white text-center">
-                    <Trophy size={100} className="md:w-[140px] md:h-[140px] mb-8 animate-bounce text-yellow-300 drop-shadow-xl" />
-                    <h2 className="text-5xl md:text-7xl font-black italic mb-6 drop-shadow-[0_8px_0_#166534]">通关啦！</h2>
-                    <div className="bg-white text-green-600 px-8 md:px-10 py-4 md:py-5 rounded-full font-black text-xl md:text-2xl animate-pulse shadow-xl border-4 border-green-200">
-                       成功征服了深渊与转盘！
+                  <div className="absolute inset-0 z-50 flex flex-col items-center justify-center pointer-events-none">
+                    <h2 className="text-7xl md:text-9xl font-black italic text-yellow-300 drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] animate-bounce" style={{ WebkitTextStroke: '4px #b45309' }}>
+                       恭喜通关
+                    </h2>
+                    
+                    {finalTime && (
+                        <div className="mt-6 bg-black/60 px-8 py-3 rounded-full border-4 border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.6)] animate-in fade-in zoom-in duration-1000 delay-500">
+                           <span className="text-yellow-400 text-2xl md:text-4xl font-black tracking-widest">
+                               ⏱️ 通关用时: {finalTime} 秒
+                           </span>
+                        </div>
+                    )}
+
+                    <div className="fixed inset-0 pointer-events-none z-[100] overflow-hidden">
+                        {[...Array(100)].map((_, i) => (
+                            <div key={i} className="absolute top-[-10%]" style={{
+                                left: `${Math.random() * 100}%`,
+                                width: `${Math.random() * 10 + 6}px`,
+                                height: `${Math.random() * 20 + 10}px`,
+                                backgroundColor: ['#facc15', '#f43f5e', '#38bdf8', '#4ade80', '#a855f7'][Math.floor(Math.random() * 5)],
+                                animation: `confetti-fall ${Math.random() * 3 + 2}s linear ${Math.random() * 2}s infinite`,
+                                borderRadius: Math.random() > 0.5 ? '50%' : '2px'
+                            }} />
+                        ))}
                     </div>
                   </div>
                 )}
@@ -1406,11 +2140,11 @@
                           <kbd className="px-3 py-1 bg-slate-100 rounded-lg border-b-4 border-slate-300 text-slate-700">D</kbd>
                        </div>
                     </div>
-                    <span>推杆 / 移动</span>
+                    <span>推杆 / 移动 / 滑道抗离心力</span>
                  </div>
                  <div className="flex flex-col items-center justify-center gap-2 bg-white px-8 py-3 rounded-2xl shadow-sm border border-sky-200">
                     <kbd className="px-12 py-1 bg-slate-100 rounded-lg border-b-4 border-slate-300 text-slate-700">Space</kbd>
-                    <span>跳跃过沟壑</span>
+                    <span>跳跃过坑</span>
                  </div>
               </div>
             </div>
