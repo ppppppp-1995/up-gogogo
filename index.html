@@ -18,9 +18,11 @@
             user-select: none;
             -webkit-user-select: none;
         }
+        
+        /* 修改版：带有 strict-lock 的 body 才会显示阻挡层 */
         @media screen and (orientation: portrait) {
-            #portrait-lock { display: flex !important; }
-            #app-container { display: none !important; }
+            body.strict-lock #portrait-lock { display: flex !important; }
+            body.strict-lock #app-container { display: none !important; }
         }
         #portrait-lock { display: none; }
         
@@ -49,19 +51,47 @@
         }
     </style>
 </head>
-<body>
-    <div id="portrait-lock" class="fixed inset-0 bg-sky-900 z-[9999] flex-col items-center justify-center text-white p-8 text-center">
-        <svg class="w-28 h-28 mb-8 animate-[pulse_2s_infinite] text-sky-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<body class="strict-lock">
+    <!-- 优化版：带有跳过功能的竖屏提示页面 -->
+    <div id="portrait-lock" class="fixed inset-0 bg-sky-900 z-[9999] flex-col items-center justify-center text-white p-6 text-center">
+        <svg class="w-24 h-24 mb-6 animate-[pulse_2s_infinite] text-sky-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" transform="rotate(90 12 12)" />
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4l16 16M4 20L20 4" class="opacity-30"/>
         </svg>
-        <h2 class="text-4xl font-black mb-4 tracking-wider">请旋转手机屏幕</h2>
-        <p class="text-sky-200 text-lg leading-relaxed mt-4">为了获得最佳的 3D 跑酷体验<br/>本游戏需要<span class="text-yellow-400 font-bold mx-1 text-xl">横向</span>握持设备游玩</p>
+        <h2 class="text-3xl font-black mb-2 tracking-wider">建议横屏游玩</h2>
+        <p class="text-sky-200 text-base leading-relaxed mt-2">横屏拥有更宽广的视野体验<br/>但您也可以随时跳过</p>
+        
+        <div class="mt-8 flex flex-col gap-4 w-full max-w-[280px] mx-auto">
+            <button onclick="unlockAndFullscreen()" class="w-full px-6 py-4 bg-yellow-400 text-yellow-900 font-black rounded-full text-lg shadow-[0_4px_0_#b45309] active:translate-y-1 active:shadow-none transition-all">尝试强制横屏/全屏</button>
+            <button onclick="unlockPortrait()" class="w-full px-6 py-4 bg-sky-800 text-sky-200 font-bold rounded-full text-base border-2 border-sky-600 active:bg-sky-700 transition-all">忽略，我要竖屏玩</button>
+        </div>
     </div>
 
     <div id="app-container">
         <div id="root"></div>
     </div>
+
+    <!-- 内联 JS 处理锁定逻辑 -->
+    <script>
+        async function unlockAndFullscreen() {
+            document.body.classList.remove('strict-lock'); // 解除 CSS 封锁
+            try {
+                const docEl = document.documentElement;
+                if (docEl.requestFullscreen) { await docEl.requestFullscreen(); }
+                else if (docEl.webkitRequestFullscreen) { await docEl.webkitRequestFullscreen(); }
+                
+                if (window.screen && window.screen.orientation && window.screen.orientation.lock) {
+                    await window.screen.orientation.lock('landscape');
+                }
+            } catch (err) { 
+                console.warn("浏览器或应用拦截了自动旋转", err); 
+            }
+        }
+
+        function unlockPortrait() {
+            document.body.classList.remove('strict-lock'); // 直接解除封锁，不执行全屏横屏 API
+        }
+    </script>
 
     <script type="text/babel">
         const { useState, useEffect, useRef, useCallback } = React;
@@ -332,7 +362,9 @@
                     if (!mountRef.current || !rendererRef.current || !cameraRef.current) return;
                     const w = entry.contentRect.width; const h = entry.contentRect.height;
                     if (w > 0 && h > 0) {
-                      rendererRef.current.setSize(w, h); cameraRef.current.aspect = w / h; cameraRef.current.updateProjectionMatrix();
+                      rendererRef.current.setSize(w, h); 
+                      cameraRef.current.aspect = w / h; 
+                      cameraRef.current.updateProjectionMatrix();
                     }
                   }
                 });
@@ -537,7 +569,7 @@
               createPlatform(100, 80, -745, 'checker', '#f472b6', '#ec4899');      
               createPlatform(100, 10, -765, 'stripes', '#fde047', '#eab308', 0.02); 
               
-              // 终点大平台，位置和尺寸完美匹配抛物线落点，面积扩大4倍防漏接
+              // 终点大平台
               createPlatform(300, 1200, -3200, 'dots', '#4ade80', '#22c55e');   
               const finalArchGeo = new THREE.TorusGeometry(40, 4, 16, 64, Math.PI);
               const finalArch = new THREE.Mesh(finalArchGeo, new THREE.MeshStandardMaterial({color:0xfacc15, emissive: 0xfacc15, emissiveIntensity:0.8}));
@@ -740,7 +772,7 @@
 
               shortcutRef.current = { mainGroup: shortcutGroup, bridgesGroup: bridgesGroup, active: false, x: 0, z: -560, y: 0, layers: [ { ...l1, speed: 0.008 }, { ...l2, speed: -0.045 }, { ...l3, speed: 0.065 } ] };
 
-              // === 新增 第三关：U型极速水滑道 ===
+              // === 第三关：U型极速水滑道 ===
               const slideGroup = new THREE.Group();
               const slideObjects = [];
               
@@ -784,21 +816,17 @@
               bottomArch.position.set(0, -150, -2700);
               scene.add(bottomArch);
 
-              // 【美化重塑】香蕉皮变得更厚、更立体，且翘起一定角度
               const createBanana = () => {
                   const g = new THREE.Group();
                   const mat = new THREE.MeshStandardMaterial({color: 0xfacc15, emissive: 0xa16207, emissiveIntensity: 0.3, roughness: 0.4}); 
                   for(let i=0; i<4; i++) {
                       const peel = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 16), mat);
-                      // 增大 Y 轴缩放，让它不再是一张纸，更有体积感
                       peel.scale.set(0.45, 0.35, 2.2); 
                       peel.position.set(Math.cos(i*Math.PI/2)*0.8, 0.4, Math.sin(i*Math.PI/2)*0.8);
                       peel.rotation.y = -i*Math.PI/2;
-                      // 增大旋转角度，让香蕉皮翘起来
                       peel.rotation.x = Math.PI / 4;
                       g.add(peel);
                   }
-                  // 加上深棕色的香蕉蒂头
                   const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.25, 0.8), new THREE.MeshStandardMaterial({color: 0x654321}));
                   stem.position.y = 0.9;
                   g.add(stem);
@@ -845,7 +873,6 @@
                   return g;
               }
 
-              // 【核心优化】将道具生成的起点从 0.02 延后到 0.12，给玩家留下充足的入场反应缓冲时间！
               for (let t = 0.12; t < 0.75; t += 0.05) {
                   const rand = Math.random();
                   let type = 'banana';
@@ -1046,12 +1073,19 @@
                   let camTarget, camPos;
                   let lerpSpeed = 0.15; 
 
+                  // 💡【核心改进】动态视场角 (FOV) 以适配竖向握持，避免竖屏游玩时画面边缘被过度裁切
+                  const isPortrait = (window.innerWidth / window.innerHeight) < 1;
+                  const baseFOV = isPortrait ? 85 : 50;
+                  const flungFOV = isPortrait ? 50 : 25;
+                  const slideFOV = isPortrait ? 90 : 55;
+                  const boostFOVTarget = isPortrait ? 110 : 75;
+
                   if (playerRef.current.slideT !== undefined && slideObjectsRef.current && slideObjectsRef.current.curve) {
                       const slideCurve = slideObjectsRef.current.curve;
                       const pt = slideCurve.getPointAt(playerRef.current.slideT);
                       const tangent = slideCurve.getTangentAt(playerRef.current.slideT);
                       
-                      const boostFOV = (Date.now() < playerRef.current.boostUntil) ? 75 : 55;
+                      const boostFOV = (Date.now() < playerRef.current.boostUntil) ? boostFOVTarget : slideFOV;
                       if (camera.fov) {
                           camera.fov += (boostFOV - camera.fov) * 0.1;
                           camera.updateProjectionMatrix();
@@ -1060,8 +1094,8 @@
                       camTarget = pt.clone().add(tangent.clone().multiplyScalar(20));
                       camPos = pt.clone().sub(tangent.clone().multiplyScalar(15)).add(new THREE.Vector3(0, 10, 0));
                   } else if (playerRef.current.isFlung) {
-                      if (camera.fov && Math.abs(camera.fov - 25) > 1) {
-                          camera.fov += (25 - camera.fov) * 0.15; 
+                      if (camera.fov && Math.abs(camera.fov - flungFOV) > 1) {
+                          camera.fov += (flungFOV - camera.fov) * 0.15; 
                           camera.updateProjectionMatrix();
                       }
                       const camDist = 8;  
@@ -1080,8 +1114,8 @@
                       );
                       lerpSpeed = 0.5; 
                   } else {
-                      if (camera.fov && Math.abs(camera.fov - 50) > 1) {
-                          camera.fov += (50 - camera.fov) * 0.1;
+                      if (camera.fov && Math.abs(camera.fov - baseFOV) > 1) {
+                          camera.fov += (baseFOV - camera.fov) * 0.1;
                           camera.updateProjectionMatrix();
                       }
 
@@ -1909,13 +1943,14 @@
                 
                 <div ref={mountRef} className="absolute inset-0 z-0" />
 
+                {/* --- 适配了竖屏的虚拟按键 (防按键相互重叠) --- */}
                 {showMobileControls && gameState !== 'WIN' && (
                   <>
-                    <div id="joystick-zone" ref={joystickBaseRef} onTouchStart={handleTouchMove} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchEnd} className="absolute bottom-8 left-8 w-36 h-36 bg-white/20 backdrop-blur-md rounded-full border-[3px] border-white/40 shadow-[inset_0_0_20px_rgba(255,255,255,0.2)] flex items-center justify-center z-50 md:hidden touch-none">
-                      <div className="w-14 h-14 bg-white/90 rounded-full shadow-[0_5px_15px_rgba(0,0,0,0.2)] pointer-events-none transition-transform duration-75" style={{ transform: `translate(${joystickPos.x}px, ${joystickPos.y}px)` }} />
+                    <div id="joystick-zone" ref={joystickBaseRef} onTouchStart={handleTouchMove} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchEnd} className="absolute bottom-6 left-4 sm:bottom-8 sm:left-8 w-28 h-28 sm:w-36 sm:h-36 bg-white/20 backdrop-blur-md rounded-full border-[3px] border-white/40 shadow-[inset_0_0_20px_rgba(255,255,255,0.2)] flex items-center justify-center z-50 md:hidden touch-none">
+                      <div className="w-10 h-10 sm:w-14 sm:h-14 bg-white/90 rounded-full shadow-[0_5px_15px_rgba(0,0,0,0.2)] pointer-events-none transition-transform duration-75" style={{ transform: `translate(${joystickPos.x}px, ${joystickPos.y}px)` }} />
                     </div>
-                    <div onTouchStart={handleJumpStart} onTouchEnd={handleJumpEnd} onTouchCancel={handleJumpEnd} className="absolute bottom-10 right-10 w-28 h-28 bg-white/20 backdrop-blur-md rounded-full border-[3px] border-white/40 flex items-center justify-center z-50 md:hidden touch-none active:bg-white/40 active:scale-90 transition-all shadow-[0_5px_20px_rgba(0,0,0,0.15)]">
-                      <span className="text-white font-black text-2xl pointer-events-none tracking-widest drop-shadow-md">跳跃</span>
+                    <div onTouchStart={handleJumpStart} onTouchEnd={handleJumpEnd} onTouchCancel={handleJumpEnd} className="absolute bottom-8 right-4 sm:bottom-10 sm:right-10 w-24 h-24 sm:w-28 sm:h-28 bg-white/20 backdrop-blur-md rounded-full border-[3px] border-white/40 flex items-center justify-center z-50 md:hidden touch-none active:bg-white/40 active:scale-90 transition-all shadow-[0_5px_20px_rgba(0,0,0,0.15)]">
+                      <span className="text-white font-black text-xl sm:text-2xl pointer-events-none tracking-widest drop-shadow-md">跳跃</span>
                     </div>
                   </>
                 )}
@@ -1928,8 +1963,8 @@
                 )}
 
                 {gameState === 'READY' && (
-                  <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-sky-900/40 backdrop-blur-sm p-4 md:p-8 text-center transition-opacity duration-500">
-                    <h1 className="text-5xl md:text-7xl font-black mb-6 italic tracking-tighter text-white drop-shadow-[0_8px_0_#0284c7]">阿噗向前冲!</h1>
+                  <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-sky-900/40 backdrop-blur-sm p-4 md:p-8 text-center transition-opacity duration-500 overflow-y-auto">
+                    <h1 className="text-5xl md:text-7xl font-black mb-6 italic tracking-tighter text-white drop-shadow-[0_8px_0_#0284c7] mt-8">阿噗向前冲!</h1>
                     
                     <div className="flex flex-col md:flex-row gap-4 md:gap-6 mb-8 w-full max-w-2xl justify-center items-stretch">
                         <div className="bg-white/20 backdrop-blur-md p-4 md:p-6 rounded-3xl border-2 border-white/40 flex-1 flex flex-col justify-between shadow-xl">
@@ -1977,7 +2012,7 @@
                         </div>
                     </div>
 
-                    <button onClick={startGame} className="px-10 md:px-16 py-4 md:py-6 bg-pink-400 text-white font-black text-2xl md:text-4xl rounded-full hover:bg-pink-500 active:scale-95 shadow-[0_8px_0_#be185d] flex justify-center items-center gap-4 transition-all hover:scale-105 border-4 border-pink-300">
+                    <button onClick={startGame} className="px-10 md:px-16 py-4 md:py-6 bg-pink-400 text-white font-black text-2xl md:text-4xl rounded-full hover:bg-pink-500 active:scale-95 shadow-[0_8px_0_#be185d] flex justify-center items-center gap-4 transition-all hover:scale-105 border-4 border-pink-300 mb-8">
                       <Play className="fill-current w-6 h-6 md:w-10 md:h-10" /> 闯入游乐园
                     </button>
                   </div>
@@ -2013,20 +2048,20 @@
                                 <>
                                     <CheckCircle className="text-green-400 w-24 h-24 mb-6 drop-shadow-lg" />
                                     <span className="font-black text-green-400 text-5xl tracking-widest drop-shadow-lg mb-4">回答正确!</span>
-                                    <span className="font-bold text-white text-2xl drop-shadow-md bg-green-500/40 px-6 py-2 rounded-full backdrop-blur-sm">
+                                    <span className="font-bold text-white text-2xl drop-shadow-md bg-green-500/40 px-6 py-2 rounded-full backdrop-blur-sm text-center">
                                         {quizType === 'QUIZ_1' && '恭喜！朝着提示路线前进吧！'}
                                         {quizType === 'QUIZ_2' && '恭喜您，捷径大转盘为您升起。'}
-                                        {quizType === 'QUIZ_3' && '恭喜！获得【婵娟防护罩】，滑道冲刺吧！'}
+                                        {quizType === 'QUIZ_3' && '恭喜！获得【婵娟防护罩】！'}
                                     </span>
                                 </>
                             ) : (
                                 <>
                                     <XCircle className="text-red-400 w-24 h-24 mb-6 drop-shadow-lg" />
                                     <span className="font-black text-red-400 text-5xl tracking-widest drop-shadow-lg mb-4">回答错误!</span>
-                                    <span className="font-bold text-white text-2xl drop-shadow-md bg-red-500/40 px-6 py-2 rounded-full backdrop-blur-sm">
+                                    <span className="font-bold text-white text-2xl drop-shadow-md bg-red-500/40 px-6 py-2 rounded-full backdrop-blur-sm text-center">
                                         {quizType === 'QUIZ_1' && '很遗憾，您未能获得提示。'}
                                         {quizType === 'QUIZ_2' && '很遗憾，您未能解锁捷径。'}
-                                        {quizType === 'QUIZ_3' && '缺少防护罩，请小心躲避滑道上的障碍物！'}
+                                        {quizType === 'QUIZ_3' && '缺少防护罩，小心躲避障碍物！'}
                                     </span>
                                 </>
                             )}
@@ -2102,7 +2137,7 @@
 
                 {gameState === 'WIN' && (
                   <div className="absolute inset-0 z-50 flex flex-col items-center justify-center pointer-events-none">
-                    <h2 className="text-7xl md:text-9xl font-black italic text-yellow-300 drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] animate-bounce" style={{ WebkitTextStroke: '4px #b45309' }}>
+                    <h2 className="text-6xl md:text-9xl font-black italic text-yellow-300 drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] animate-bounce" style={{ WebkitTextStroke: '4px #b45309' }}>
                        恭喜通关
                     </h2>
                     
